@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
-import { storage, Project } from "@/lib/storage";
-import { Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Plus, Trash2, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
+import { useProjects } from "@/hooks/useProjects";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const PRESET_COLORS = [
   "#0A84FF", // Electric Blue
@@ -21,26 +22,26 @@ const PRESET_COLORS = [
 ];
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
   const [newProjectName, setNewProjectName] = useState("");
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
   const [isAdding, setIsAdding] = useState(false);
 
-  useEffect(() => {
-    loadProjects();
-  }, []);
+  const {
+    projects,
+    isLoading,
+    error,
+    addProject,
+    deleteProject,
+    isAdding: isCreating,
+    isDeleting,
+  } = useProjects();
 
-  const loadProjects = () => {
-    setProjects(storage.getProjects());
-  };
-
-  const addProject = () => {
+  const handleAddProject = () => {
     if (!newProjectName.trim()) {
-      toast.error("Project name is required");
       return;
     }
 
-    storage.addProject({
+    addProject({
       name: newProjectName.trim(),
       color: selectedColor,
     });
@@ -48,37 +49,44 @@ export default function ProjectsPage() {
     setNewProjectName("");
     setSelectedColor(PRESET_COLORS[0]);
     setIsAdding(false);
-    loadProjects();
-    toast.success("Project created");
   };
 
-  const deleteProject = (id: string) => {
-    // Check if project has entries
-    const entries = storage.getEntries();
-    const hasEntries = entries.some(e => e.projectId === id);
-
-    if (hasEntries) {
-      toast.error("Cannot delete project with existing entries");
-      return;
+  const handleDeleteProject = (id: string) => {
+    if (confirm("Are you sure you want to archive this project?")) {
+      deleteProject(id);
     }
-
-    storage.deleteProject(id);
-    loadProjects();
-    toast.success("Project deleted");
   };
+
+  // Show database error if tables don't exist
+  const isDatabaseError = error && (error.message?.includes('404') || (error as any).code === 'PGRST116');
 
   return (
     <div className="container mx-auto px-8 py-8">
+      {isDatabaseError && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Database Not Set Up</AlertTitle>
+          <AlertDescription>
+            The database tables haven't been created yet. Please run the migration first.
+            <br />
+            <span className="text-sm mt-2 block">
+              Run: <code className="bg-black/10 px-2 py-1 rounded">./run-architecture-migration.sh</code> in your terminal
+            </span>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
           <p className="text-sm text-muted-foreground mt-2">
-            {projects.length} projects
+            {isLoading ? "Loading..." : `${projects.length} projects`}
           </p>
         </div>
         <Button
           variant="default"
           onClick={() => setIsAdding(!isAdding)}
+          disabled={isLoading}
         >
           <Plus className="h-4 w-4" />
           New Project
@@ -92,7 +100,7 @@ export default function ProjectsPage() {
             value={newProjectName}
             onChange={(e) => setNewProjectName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') addProject();
+              if (e.key === 'Enter') handleAddProject();
               if (e.key === 'Escape') setIsAdding(false);
             }}
             autoFocus
@@ -118,8 +126,15 @@ export default function ProjectsPage() {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="default" onClick={addProject}>
-              Create Project
+            <Button variant="default" onClick={handleAddProject} disabled={isCreating}>
+              {isCreating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Project"
+              )}
             </Button>
             <Button variant="outline" onClick={() => setIsAdding(false)}>
               Cancel
@@ -128,7 +143,19 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {projects.length === 0 ? (
+      {isLoading ? (
+        <div className="grid gap-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-4 p-4 rounded border border-border">
+              <Skeleton className="w-4 h-4 rounded-full" />
+              <div className="flex-1">
+                <Skeleton className="h-5 w-32 mb-2" />
+                <Skeleton className="h-4 w-48" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : projects.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="w-16 h-16 mb-4 flex items-center justify-center">
             <div className="w-12 h-12 border-2 border-dashed border-muted-foreground rounded" />
@@ -138,38 +165,37 @@ export default function ProjectsPage() {
         </div>
       ) : (
         <div className="grid gap-3">
-          {projects.map((project, index) => {
-            const entries = storage.getEntries().filter(e => e.projectId === project.id);
-            const totalTime = entries.reduce((sum, e) => sum + e.duration, 0);
-            const totalHours = (totalTime / 3600).toFixed(1);
-
-            return (
+          {projects.map((project, index) => (
+            <div
+              key={project.id}
+              className="group flex items-center gap-4 p-4 rounded border border-border hover:bg-surface transition-colors animate-slide-in"
+              style={{ animationDelay: `${index * 30}ms` }}
+            >
               <div
-                key={project.id}
-                className="group flex items-center gap-4 p-4 rounded border border-border hover:bg-surface transition-colors animate-slide-in"
-                style={{ animationDelay: `${index * 30}ms` }}
-              >
-                <div
-                  className="w-4 h-4 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: project.color }}
-                />
-                <div className="flex-1">
-                  <div className="font-semibold">{project.name}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {entries.length} entries • {totalHours}h tracked
-                  </div>
+                className="w-4 h-4 rounded-full flex-shrink-0"
+                style={{ backgroundColor: project.color }}
+              />
+              <div className="flex-1">
+                <div className="font-semibold">{project.name}</div>
+                <div className="text-sm text-muted-foreground">
+                  {project.clientId && "Client project"} • {project.hourlyRate ? `$${project.hourlyRate}/hr` : "No rate set"}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => deleteProject(project.id)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
               </div>
-            );
-          })}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleDeleteProject(project.id)}
+                disabled={isDeleting}
+                className="opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                {isDeleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                )}
+              </Button>
+            </div>
+          ))}
         </div>
       )}
     </div>

@@ -13,12 +13,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useProjects } from "@/hooks/useProjects";
+import { useTimeEntries } from "@/hooks/useTimeEntries";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 export function Timer() {
   const [timerState, setTimerState] = useState<TimerState>(storage.getTimerState());
   const [currentTime, setCurrentTime] = useState(0);
   const [description, setDescription] = useState("");
-  const projects = storage.getProjects();
+  
+  // Use Supabase hooks
+  const { projects, isLoading: isLoadingProjects } = useProjects();
+  const { addEntry, isAdding } = useTimeEntries();
 
   useEffect(() => {
     setDescription(timerState.currentDescription);
@@ -84,7 +90,8 @@ export function Timer() {
       return;
     }
 
-    storage.addEntry({
+    // Save to Supabase
+    addEntry({
       projectId: timerState.currentProjectId!,
       description: timerState.currentDescription,
       tags: [],
@@ -103,15 +110,50 @@ export function Timer() {
     setTimerState(newState);
     storage.saveTimerState(newState);
     setDescription("");
-    toast.success("Time entry saved");
   };
 
   const isIdle = !timerState.isRunning;
   const isRunning = timerState.isRunning && !timerState.isPaused;
   const isPaused = timerState.isRunning && timerState.isPaused;
 
+  // Keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      key: ' ',
+      callback: () => {
+        if (isIdle) {
+          startTimer();
+        } else if (isRunning) {
+          pauseTimer();
+        } else if (isPaused) {
+          resumeTimer();
+        }
+      },
+      description: 'Start/Pause timer',
+    },
+    {
+      key: 's',
+      callback: () => {
+        if (isRunning || isPaused) {
+          stopTimer();
+        }
+      },
+      description: 'Stop timer',
+    },
+  ]);
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8">
+    <div className="relative flex flex-col items-center justify-center min-h-[60vh] space-y-8">
+      {/* Keyboard hint */}
+      <div className="absolute top-4 right-8 text-xs text-muted-foreground">
+        <kbd className="px-2 py-1 bg-muted rounded">Space</kbd> to start/pause
+        {(isRunning || isPaused) && (
+          <>
+            {" • "}
+            <kbd className="px-2 py-1 bg-muted rounded">S</kbd> to stop
+          </>
+        )}
+      </div>
       <div
         className={cn(
           "relative flex items-center justify-center w-80 h-80 rounded border-2 transition-all duration-300",
@@ -140,23 +182,29 @@ export function Timer() {
             setTimerState(newState);
             storage.saveTimerState(newState);
           }}
-          disabled={timerState.isRunning}
+          disabled={timerState.isRunning || isLoadingProjects}
         >
           <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select project" />
+            <SelectValue placeholder={isLoadingProjects ? "Loading projects..." : "Select project"} />
           </SelectTrigger>
           <SelectContent>
-            {projects.map((project) => (
-              <SelectItem key={project.id} value={project.id}>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: project.color }}
-                  />
-                  <span>{project.name}</span>
-                </div>
-              </SelectItem>
-            ))}
+            {projects.length === 0 ? (
+              <div className="p-2 text-sm text-muted-foreground">
+                No projects yet. Create one first!
+              </div>
+            ) : (
+              projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: project.color }}
+                    />
+                    <span>{project.name}</span>
+                  </div>
+                </SelectItem>
+              ))
+            )}
           </SelectContent>
         </Select>
 
@@ -194,10 +242,11 @@ export function Timer() {
                 variant="timer"
                 size="timer"
                 onClick={stopTimer}
+                disabled={isAdding}
                 className="min-w-[200px]"
               >
                 <Square className="h-5 w-5" />
-                STOP
+                {isAdding ? "SAVING..." : "STOP"}
               </Button>
             </>
           )}

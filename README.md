@@ -1,4 +1,38 @@
-# Welcome to your Lovable project
+# Time Brutalist - Advanced Time Tracking Application
+
+A modern, brutalist-styled time tracking application with advanced reporting, team collaboration, and billing features.
+
+## 🚀 Quick Start
+
+```sh
+# Install dependencies
+bun install
+
+# Copy environment variables
+cp .env.example .env
+# Edit .env with your Supabase credentials
+
+# Start development server
+bun run dev
+```
+
+## 📚 Documentation
+
+For detailed implementation guide, features, and setup instructions, see [IMPLEMENTATION_GUIDE.md](./IMPLEMENTATION_GUIDE.md)
+
+## ✨ Key Features
+
+- ⏱️ Timer with pause/resume
+- 📊 Dashboard with charts and analytics
+- 🔍 Advanced filtering (date range, projects, tags)
+- 📥 CSV export with filters
+- 👥 Team collaboration (in progress)
+- 🔐 Supabase authentication
+- 💰 Billing and invoicing (planned)
+
+## 🛠️ Tech Stack
+
+React 18 • TypeScript • Vite • Tailwind CSS • shadcn/ui • Recharts • Supabase
 
 ## Project info
 
