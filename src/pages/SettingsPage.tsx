@@ -16,6 +16,11 @@ interface FeatureSettings {
   tags: boolean;
   reports: boolean;
   team: boolean;
+  budgets: boolean;
+  expenses: boolean;
+  apiKeys: boolean;
+  import: boolean;
+  integrations: boolean;
 }
 
 type UserMode = 'personal' | 'freelancer' | 'team';
@@ -29,6 +34,11 @@ const defaultSettings: FeatureSettings = {
   tags: true,
   reports: true,
   team: false,
+  budgets: true,
+  expenses: true,
+  apiKeys: false,
+  import: false,
+  integrations: false,
 };
 
 export default function SettingsPage() {
@@ -73,6 +83,11 @@ export default function SettingsPage() {
         tags: true,
         reports: true,
         team: false,
+        budgets: false,
+        expenses: false,
+        apiKeys: false,
+        import: false,
+        integrations: false,
       },
       freelancer: {
         clients: true,
@@ -80,6 +95,11 @@ export default function SettingsPage() {
         tags: true,
         reports: true,
         team: false,
+        budgets: true,
+        expenses: true,
+        apiKeys: true,
+        import: true,
+        integrations: true,
       },
       team: {
         clients: true,
@@ -87,6 +107,11 @@ export default function SettingsPage() {
         tags: true,
         reports: true,
         team: true,
+        budgets: true,
+        expenses: true,
+        apiKeys: true,
+        import: true,
+        integrations: true,
       },
     };
     
@@ -188,7 +213,7 @@ export default function SettingsPage() {
                       Tracking billable time for clients and generating invoices
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      ✓ Timer • ✓ Projects • ✓ Clients • ✓ Invoicing • ✓ Tags • ✓ Reports
+                      ✓ Timer • ✓ Projects • ✓ Clients • ✓ Invoicing • ✓ Budgets • ✓ Expenses • ✓ Tags • ✓ Reports
                     </p>
                     <p className="text-xs text-muted-foreground">
                       ✗ Team collaboration
@@ -215,7 +240,7 @@ export default function SettingsPage() {
                       Multiple people working together on projects
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      ✓ All features including team collaboration
+                      ✓ All features including team collaboration, budgets, and expenses
                     </p>
                   </div>
                   {userMode === 'team' && (
@@ -302,6 +327,38 @@ export default function SettingsPage() {
 
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
+                <Label htmlFor="feature-budgets" className="font-medium">Budget Tracking</Label>
+                <p className="text-sm text-muted-foreground">
+                  Set project budgets, track spending, and receive alerts
+                </p>
+              </div>
+              <Switch
+                id="feature-budgets"
+                checked={features.budgets}
+                onCheckedChange={(checked) => updateFeature('budgets', checked)}
+              />
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="feature-expenses" className="font-medium">Expense Management</Label>
+                <p className="text-sm text-muted-foreground">
+                  Track project expenses, attach receipts, and manage billable costs
+                </p>
+              </div>
+              <Switch
+                id="feature-expenses"
+                checked={features.expenses}
+                onCheckedChange={(checked) => updateFeature('expenses', checked)}
+              />
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
                 <Label htmlFor="feature-team" className="font-medium">Team Collaboration</Label>
                 <p className="text-sm text-muted-foreground">
                   Manage team members, share projects, view team activity
@@ -311,6 +368,54 @@ export default function SettingsPage() {
                 id="feature-team"
                 checked={features.team}
                 onCheckedChange={(checked) => updateFeature('team', checked)}
+              />
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="feature-api-keys" className="font-medium">API Keys</Label>
+                <p className="text-sm text-muted-foreground">
+                  Generate API keys for external integrations and automation
+                </p>
+              </div>
+              <Switch
+                id="feature-api-keys"
+                checked={features.apiKeys}
+                onCheckedChange={(checked) => updateFeature('apiKeys', checked)}
+              />
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="feature-import" className="font-medium">Data Import</Label>
+                <p className="text-sm text-muted-foreground">
+                  Import time entries and projects from CSV or other time tracking tools
+                </p>
+              </div>
+              <Switch
+                id="feature-import"
+                checked={features.import}
+                onCheckedChange={(checked) => updateFeature('import', checked)}
+              />
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="feature-integrations" className="font-medium">Integrations</Label>
+                <p className="text-sm text-muted-foreground">
+                  Connect with external services like Slack, Zapier, and webhooks
+                </p>
+              </div>
+              <Switch
+                id="feature-integrations"
+                checked={features.integrations}
+                onCheckedChange={(checked) => updateFeature('integrations', checked)}
               />
             </div>
           </CardContent>

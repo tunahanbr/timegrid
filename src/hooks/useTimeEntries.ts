@@ -2,8 +2,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabaseStorage, TimeEntry } from "@/lib/supabase-storage";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 
 export function useTimeEntries(filters?: any) {
   const { user } = useAuth();
@@ -15,30 +13,8 @@ export function useTimeEntries(filters?: any) {
     enabled: !!user,
   });
 
-  // Real-time subscriptions
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel("time-entries-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "time_entries",
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["time-entries"] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, queryClient]);
+  // Real-time subscriptions removed - using polling instead
+  // You can implement WebSocket-based real-time updates if needed
 
   const addMutation = useMutation({
     mutationFn: (entry: Omit<TimeEntry, "id" | "createdAt">) =>

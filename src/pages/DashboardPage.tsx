@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
-import { storage, TimeEntry, Project } from "@/lib/storage";
+import { useMemo } from "react";
+import { useTimeEntries } from "@/hooks/useTimeEntries";
+import { useProjects } from "@/hooks/useProjects";
 import { formatDurationShort } from "@/lib/utils-time";
 import {
   BarChart,
@@ -18,24 +19,53 @@ import {
 } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, Clock, TrendingUp, Folder } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Calendar, Clock, TrendingUp, Folder, AlertCircle } from "lucide-react";
 import { format, subDays, startOfWeek, endOfWeek, eachDayOfInterval, parseISO } from "date-fns";
+import { useState } from "react";
 
 export default function DashboardPage() {
-  const [entries, setEntries] = useState<TimeEntry[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const { entries, isLoading: entriesLoading, error: entriesError } = useTimeEntries();
+  const { projects, isLoading: projectsLoading, error: projectsError } = useProjects();
   const [timeRange, setTimeRange] = useState<"week" | "month">("week");
 
-  useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  // Loading state
+  if (entriesLoading || projectsLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-4 w-24" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-32" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Skeleton className="h-96 w-full" />
+      </div>
+    );
+  }
 
-  const loadData = () => {
-    setEntries(storage.getEntries());
-    setProjects(storage.getProjects());
-  };
+  // Error state
+  if (entriesError || projectsError) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          {entriesError?.message || projectsError?.message || "Failed to load dashboard data"}
+        </AlertDescription>
+      </Alert>
+    );
+  }
 
   // Calculate date ranges
   const today = new Date();

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Play, Pause, Square } from "lucide-react";
+import { Play, Pause, Square, Plus, Clock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { storage, TimerState } from "@/lib/storage";
 import { formatDuration, getTodayISO } from "@/lib/utils-time";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -12,18 +13,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useProjects } from "@/hooks/useProjects";
 import { useTimeEntries } from "@/hooks/useTimeEntries";
+import { useTags } from "@/hooks/useTags";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { Badge } from "@/components/ui/badge";
+import { X as XIcon } from "lucide-react";
 
 export function Timer() {
   const [timerState, setTimerState] = useState<TimerState>(storage.getTimerState());
   const [currentTime, setCurrentTime] = useState(0);
   const [description, setDescription] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  
+  // Manual entry state
+  const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
+  const [manualProject, setManualProject] = useState("");
+  const [manualDescription, setManualDescription] = useState("");
+  const [manualHours, setManualHours] = useState("");
+  const [manualMinutes, setManualMinutes] = useState("");
+  const [manualTags, setManualTags] = useState<string[]>([]);
   
   // Use Supabase hooks
   const { projects, isLoading: isLoadingProjects } = useProjects();
+  const { tags, isLoading: isLoadingTags } = useTags();
   const { addEntry, isAdding } = useTimeEntries();
 
   useEffect(() => {
@@ -94,7 +116,7 @@ export function Timer() {
     addEntry({
       projectId: timerState.currentProjectId!,
       description: timerState.currentDescription,
-      tags: [],
+      tags: selectedTags,
       duration: currentTime,
       date: getTodayISO(),
     });
@@ -110,6 +132,59 @@ export function Timer() {
     setTimerState(newState);
     storage.saveTimerState(newState);
     setDescription("");
+    setSelectedTags([]);
+  };
+
+  const cancelTimer = () => {
+    if (!confirm("Are you sure you want to cancel this timer? Time will not be saved.")) {
+      return;
+    }
+
+    const newState: TimerState = {
+      isRunning: false,
+      isPaused: false,
+      startTime: null,
+      elapsedSeconds: 0,
+      currentProjectId: timerState.currentProjectId,
+      currentDescription: "",
+    };
+    setTimerState(newState);
+    storage.saveTimerState(newState);
+    setDescription("");
+    setSelectedTags([]);
+    toast.success("Timer cancelled");
+  };
+
+  const addManualEntry = () => {
+    if (!manualProject) {
+      toast.error("Please select a project");
+      return;
+    }
+
+    const hours = parseInt(manualHours) || 0;
+    const minutes = parseInt(manualMinutes) || 0;
+    const totalSeconds = (hours * 3600) + (minutes * 60);
+
+    if (totalSeconds < 60) {
+      toast.error("Entry must be at least 1 minute");
+      return;
+    }
+
+    addEntry({
+      projectId: manualProject,
+      description: manualDescription,
+      tags: manualTags,
+      duration: totalSeconds,
+      date: getTodayISO(),
+    });
+
+    // Reset form
+    setManualProject("");
+    setManualDescription("");
+    setManualHours("");
+    setManualMinutes("");
+    setManualTags([]);
+    setIsManualDialogOpen(false);
   };
 
   const isIdle = !timerState.isRunning;
@@ -140,6 +215,15 @@ export function Timer() {
       },
       description: 'Stop timer',
     },
+    {
+      key: 'Escape',
+      callback: () => {
+        if (isRunning || isPaused) {
+          cancelTimer();
+        }
+      },
+      description: 'Cancel timer',
+    },
   ]);
 
   return (
@@ -151,6 +235,8 @@ export function Timer() {
           <>
             {" • "}
             <kbd className="px-2 py-1 bg-muted rounded">S</kbd> to stop
+            {" • "}
+            <kbd className="px-2 py-1 bg-muted rounded">Esc</kbd> to cancel
           </>
         )}
       </div>
@@ -216,6 +302,68 @@ export function Timer() {
           className="w-full"
         />
 
+        {/* Tags selector */}
+        <div className="space-y-2">
+          <Select 
+            value="" 
+            onValueChange={(tagId) => {
+              const tag = tags.find(t => t.id === tagId);
+              if (tag && !selectedTags.includes(tag.name)) {
+                setSelectedTags([...selectedTags, tag.name]);
+              }
+            }}
+            disabled={timerState.isRunning || isLoadingTags}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder={isLoadingTags ? "Loading tags..." : "Add tags..."} />
+            </SelectTrigger>
+            <SelectContent>
+              {tags.length === 0 ? (
+                <div className="p-2 text-sm text-muted-foreground">
+                  No tags yet. Create one in Tags page!
+                </div>
+              ) : (
+                tags.map((tag) => (
+                  <SelectItem key={tag.id} value={tag.id}>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      <span>{tag.name}</span>
+                    </div>
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+          
+          {selectedTags.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {selectedTags.map((tag) => {
+                const tagData = tags.find(t => t.name === tag);
+                return (
+                  <Badge 
+                    key={tag} 
+                    variant="secondary"
+                    className="flex items-center gap-1"
+                    style={tagData ? { backgroundColor: tagData.color + '20', color: tagData.color } : {}}
+                  >
+                    {tag}
+                    <button
+                      onClick={() => setSelectedTags(selectedTags.filter(t => t !== tag))}
+                      className="ml-1 hover:bg-black/10 rounded-full p-0.5"
+                      disabled={timerState.isRunning}
+                    >
+                      <XIcon className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center justify-center gap-4">
           {isIdle && (
             <Button
@@ -248,6 +396,14 @@ export function Timer() {
                 <Square className="h-5 w-5" />
                 {isAdding ? "SAVING..." : "STOP"}
               </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={cancelTimer}
+                title="Cancel timer (Esc)"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </>
           )}
 
@@ -266,12 +422,193 @@ export function Timer() {
                 variant="outline"
                 size="icon"
                 onClick={stopTimer}
+                title="Stop and save"
               >
                 <Square className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={cancelTimer}
+                title="Cancel timer (Esc)"
+              >
+                <X className="h-4 w-4" />
               </Button>
             </>
           )}
         </div>
+      </div>
+
+      {/* Manual Entry Section */}
+      <div className="mt-8 pt-8 border-t">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Manual Entry</h2>
+          <Dialog open={isManualDialogOpen} onOpenChange={setIsManualDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Manual Entry
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Add Manual Time Entry</DialogTitle>
+                <DialogDescription>
+                  Add a time entry without using the timer
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="manual-project">Project *</Label>
+                  <Select value={manualProject} onValueChange={setManualProject}>
+                    <SelectTrigger id="manual-project">
+                      <SelectValue placeholder="Select a project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {isLoadingProjects ? (
+                        <SelectItem value="loading" disabled>
+                          Loading projects...
+                        </SelectItem>
+                      ) : (
+                        projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: project.color }}
+                              />
+                              <span>{project.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="manual-description">Description</Label>
+                  <Input
+                    id="manual-description"
+                    placeholder="What did you work on?"
+                    value={manualDescription}
+                    onChange={(e) => setManualDescription(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Tags</Label>
+                  <Select 
+                    value="" 
+                    onValueChange={(tagId) => {
+                      const tag = tags.find(t => t.id === tagId);
+                      if (tag && !manualTags.includes(tag.name)) {
+                        setManualTags([...manualTags, tag.name]);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Add tags..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tags.length === 0 ? (
+                        <div className="p-2 text-sm text-muted-foreground">
+                          No tags yet
+                        </div>
+                      ) : (
+                        tags.map((tag) => (
+                          <SelectItem key={tag.id} value={tag.id}>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: tag.color }}
+                              />
+                              <span>{tag.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  
+                  {manualTags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {manualTags.map((tag) => {
+                        const tagData = tags.find(t => t.name === tag);
+                        return (
+                          <Badge 
+                            key={tag} 
+                            variant="secondary"
+                            className="flex items-center gap-1"
+                            style={tagData ? { backgroundColor: tagData.color + '20', color: tagData.color } : {}}
+                          >
+                            {tag}
+                            <button
+                              onClick={() => setManualTags(manualTags.filter(t => t !== tag))}
+                              className="ml-1 hover:bg-black/10 rounded-full p-0.5"
+                            >
+                              <XIcon className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Duration *</Label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="Hours"
+                        value={manualHours}
+                        onChange={(e) => setManualHours(e.target.value)}
+                      />
+                    </div>
+                    <span className="text-muted-foreground">:</span>
+                    <div className="flex-1">
+                      <Input
+                        type="number"
+                        min="0"
+                        max="59"
+                        placeholder="Minutes"
+                        value={manualMinutes}
+                        onChange={(e) => setManualMinutes(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Enter hours and minutes (e.g., 2 hours 30 minutes)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsManualDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={addManualEntry}
+                  disabled={isAdding}
+                >
+                  <Clock className="h-4 w-4 mr-2" />
+                  {isAdding ? "Adding..." : "Add Entry"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+        
+        <p className="text-sm text-muted-foreground">
+          Add time entries manually for past work or when you forgot to start the timer.
+        </p>
       </div>
     </div>
   );

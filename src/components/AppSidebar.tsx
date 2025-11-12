@@ -1,5 +1,5 @@
 import { NavLink } from "@/components/NavLink";
-import { Timer, List, FolderKanban, Hash, Settings, BarChart3, Building2, Users, FileText } from "lucide-react";
+import { Timer, List, FolderKanban, Hash, Settings, BarChart3, Building2, Users, FileText, Key, Upload, Plug, DollarSign, Receipt, TrendingUp } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -18,6 +18,11 @@ interface FeatureSettings {
   tags: boolean;
   reports: boolean;
   team: boolean;
+  budgets: boolean;
+  expenses: boolean;
+  apiKeys: boolean;
+  import: boolean;
+  integrations: boolean;
 }
 
 const defaultSettings: FeatureSettings = {
@@ -26,6 +31,11 @@ const defaultSettings: FeatureSettings = {
   tags: true,
   reports: true,
   team: false,
+  budgets: true,
+  expenses: true,
+  apiKeys: false,
+  import: false,
+  integrations: false,
 };
 
 const STORAGE_KEY = 'timetrack_feature_settings';
@@ -44,6 +54,7 @@ export function AppSidebar() {
   const navigation = [
     { name: "Timer", href: "/", icon: Timer, enabled: true },
     { name: "Dashboard", href: "/dashboard", icon: BarChart3, enabled: features.reports },
+    { name: "Reports", href: "/reports", icon: TrendingUp, enabled: features.reports },
     { name: "Entries", href: "/entries", icon: List, enabled: true },
   ];
 
@@ -51,6 +62,8 @@ export function AppSidebar() {
     { name: "Projects", href: "/projects", icon: FolderKanban, enabled: true },
     { name: "Clients", href: "/clients", icon: Building2, enabled: features.clients },
     { name: "Invoices", href: "/invoices", icon: FileText, enabled: features.invoicing },
+    { name: "Budgets", href: "/budgets", icon: DollarSign, enabled: features.budgets },
+    { name: "Expenses", href: "/expenses", icon: Receipt, enabled: features.expenses },
   ];
 
   const teamNav = [
@@ -59,6 +72,9 @@ export function AppSidebar() {
 
   const settingsNav = [
     { name: "Tags", href: "/tags", icon: Hash, enabled: features.tags },
+    { name: "API", href: "/api", icon: Key, enabled: features.apiKeys },
+    { name: "Import", href: "/import", icon: Upload, enabled: features.import },
+    { name: "Integrations", href: "/integrations", icon: Plug, enabled: features.integrations },
     { name: "Settings", href: "/settings", icon: Settings, enabled: true },
   ];
 

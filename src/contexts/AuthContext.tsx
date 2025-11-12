@@ -1,6 +1,18 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { User, Session } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/db/client";
+
+// Custom User type (no longer using Supabase types)
+interface User {
+  id: string;
+  email: string;
+  full_name?: string;
+  avatar_url?: string;
+  created_at?: string;
+}
+
+interface Session {
+  user: User;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -19,83 +31,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    // Check for stored user session
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        setUser(userData);
+        setSession({ user: userData });
+      } catch (e) {
+        console.error('Error parsing stored user:', e);
+        localStorage.removeItem('user');
+      }
+    }
+    setLoading(false);
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
+    try {
+      const { user: newUser, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
         },
-      },
-    });
+      });
 
-    if (!error && data.user) {
-      try {
-        // Create a personal team for the user
-        const teamName = `${fullName}'s Team`;
-        const { data: team, error: teamError } = await supabase
-          .from("teams")
-          .insert({
-            name: teamName,
-            created_by: data.user.id,
-          })
-          .select()
-          .single();
-
-        if (teamError) {
-          console.error("Error creating team:", teamError);
-        }
-
-        // Create user profile with team_id and admin role
-        const { error: profileError } = await supabase.from("users").insert({
-          id: data.user.id,
-          email: data.user.email!,
-          full_name: fullName,
-          role: "admin", // First user becomes admin of their team
-          team_id: team?.id || null,
-        });
-
-        if (profileError) {
-          console.error("Error creating profile:", profileError);
-        }
-      } catch (err) {
-        console.error("Signup setup error:", err);
+      if (!error && newUser) {
+        setUser(newUser);
+        setSession({ user: newUser });
+        localStorage.setItem('user', JSON.stringify(newUser));
       }
-    }
 
-    return { error };
+      return { error };
+    } catch (error: any) {
+      return { error: { message: error.message } };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      const { user: userData, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (!error && userData) {
+        setUser(userData);
+        setSession({ user: userData });
+        localStorage.setItem('user', JSON.stringify(userData));
+      }
+
+      return { error };
+    } catch (error: any) {
+      return { error: { message: error.message } };
+    }
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    setUser(null);
+    setSession(null);
+    localStorage.removeItem('user');
   };
 
   return (

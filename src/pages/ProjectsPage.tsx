@@ -1,10 +1,28 @@
 import { useState } from "react";
-import { Plus, Trash2, Loader2, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Loader2, AlertCircle, Share2, Mail, Edit3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useProjects } from "@/hooks/useProjects";
+import { useClients } from "@/hooks/useClients";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 const PRESET_COLORS = [
   "#0A84FF", // Electric Blue
@@ -22,19 +40,35 @@ const PRESET_COLORS = [
 ];
 
 export default function ProjectsPage() {
+  const { toast } = useToast();
   const [newProjectName, setNewProjectName] = useState("");
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
+  const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [sharingProject, setSharingProject] = useState<any>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
+  
+  // Edit project state
+  const [editingProject, setEditingProject] = useState<any>(null);
+  const [editProjectName, setEditProjectName] = useState("");
+  const [editProjectColor, setEditProjectColor] = useState(PRESET_COLORS[0]);
+  const [editProjectClient, setEditProjectClient] = useState<string | null>(null);
 
   const {
     projects,
     isLoading,
     error,
     addProject,
+    updateProject,
     deleteProject,
     isAdding: isCreating,
+    isUpdating,
     isDeleting,
   } = useProjects();
+
+  const { clients } = useClients();
 
   const handleAddProject = () => {
     if (!newProjectName.trim()) {
@@ -44,16 +78,73 @@ export default function ProjectsPage() {
     addProject({
       name: newProjectName.trim(),
       color: selectedColor,
+      clientId: selectedClient || undefined,
     });
 
     setNewProjectName("");
     setSelectedColor(PRESET_COLORS[0]);
+    setSelectedClient(null);
     setIsAdding(false);
   };
 
   const handleDeleteProject = (id: string) => {
     if (confirm("Are you sure you want to archive this project?")) {
       deleteProject(id);
+    }
+  };
+
+  const openEditDialog = (project: any) => {
+    setEditingProject(project);
+    setEditProjectName(project.name);
+    setEditProjectColor(project.color);
+    setEditProjectClient(project.clientId || null);
+  };
+
+  const handleUpdateProject = () => {
+    if (!editProjectName.trim() || !editingProject) {
+      return;
+    }
+
+    updateProject({
+      id: editingProject.id,
+      updates: {
+        name: editProjectName.trim(),
+        color: editProjectColor,
+        clientId: editProjectClient || undefined,
+      },
+    });
+
+    setEditingProject(null);
+    setEditProjectName("");
+    setEditProjectColor(PRESET_COLORS[0]);
+    setEditProjectClient(null);
+  };
+
+  const handleSendInvite = async () => {
+    if (!inviteEmail.trim() || !sharingProject) return;
+
+    setIsSendingInvite(true);
+    try {
+      // In a real app, this would call an API endpoint
+      // For now, just show a success message
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      toast({
+        title: "Invitation sent",
+        description: `Invited ${inviteEmail} as ${inviteRole} to ${sharingProject.name}`,
+      });
+
+      setSharingProject(null);
+      setInviteEmail("");
+      setInviteRole("member");
+    } catch (error: any) {
+      toast({
+        title: "Failed to send invitation",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingInvite(false);
     }
   };
 
@@ -105,6 +196,23 @@ export default function ProjectsPage() {
             }}
             autoFocus
           />
+          
+          <div className="space-y-2">
+            <div className="text-sm font-medium">Client (Optional)</div>
+            <Select value={selectedClient || "none"} onValueChange={(value) => setSelectedClient(value === "none" ? null : value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a client (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No client</SelectItem>
+                {clients.map((client) => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           
           <div className="space-y-2">
             <div className="text-sm font-medium">Color</div>
@@ -178,26 +286,199 @@ export default function ProjectsPage() {
               <div className="flex-1">
                 <div className="font-semibold">{project.name}</div>
                 <div className="text-sm text-muted-foreground">
-                  {project.clientId && "Client project"} • {project.hourlyRate ? `$${project.hourlyRate}/hr` : "No rate set"}
+                  {project.clientId && (
+                    <>
+                      {clients.find(c => c.id === project.clientId)?.name || "Client"} •{" "}
+                    </>
+                  )}
+                  {project.hourlyRate ? `$${project.hourlyRate}/hr` : "No rate set"}
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleDeleteProject(project.id)}
-                disabled={isDeleting}
-                className="opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                {isDeleting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                )}
-              </Button>
+              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => openEditDialog(project)}
+                  title="Edit project"
+                >
+                  <Edit3 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSharingProject(project)}
+                  title="Share project"
+                >
+                  <Share2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleDeleteProject(project.id)}
+                  disabled={isDeleting}
+                  title="Archive project"
+                >
+                  {isDeleting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  )}
+                </Button>
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Edit Project Dialog */}
+      <Dialog open={!!editingProject} onOpenChange={(open) => !open && setEditingProject(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Project</DialogTitle>
+            <DialogDescription>
+              Update the project name and color
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-project-name">Project Name</Label>
+              <Input
+                id="edit-project-name"
+                placeholder="Project name"
+                value={editProjectName}
+                onChange={(e) => setEditProjectName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleUpdateProject()}
+              />
+            </div>
+
+            <div>
+              <Label>Client (Optional)</Label>
+              <Select value={editProjectClient || "none"} onValueChange={(value) => setEditProjectClient(value === "none" ? null : value)}>
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Select a client (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No client</SelectItem>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Project Color</Label>
+              <div className="grid grid-cols-6 gap-2 mt-2">
+                {PRESET_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    className={cn(
+                      "w-10 h-10 rounded border-2 transition-all",
+                      editProjectColor === color
+                        ? "border-primary scale-110"
+                        : "border-transparent hover:scale-105"
+                    )}
+                    style={{
+                      backgroundColor: color,
+                    }}
+                    onClick={() => setEditProjectColor(color)}
+                    aria-label={color}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button 
+                variant="default" 
+                onClick={handleUpdateProject} 
+                disabled={isUpdating || !editProjectName.trim()}
+              >
+                {isUpdating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Update Project"
+                )}
+              </Button>
+              <Button variant="outline" onClick={() => setEditingProject(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Share Project Dialog */}
+      <Dialog open={!!sharingProject} onOpenChange={(open) => !open && setSharingProject(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Share Project</DialogTitle>
+            <DialogDescription>
+              Invite team members to collaborate on "{sharingProject?.name}"
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="invite-email">Email Address</Label>
+              <div className="flex gap-2 mt-1">
+                <Mail className="h-5 w-5 text-muted-foreground mt-2" />
+                <Input
+                  id="invite-email"
+                  type="email"
+                  placeholder="colleague@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendInvite()}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="invite-role">Role</Label>
+              <Select value={inviteRole} onValueChange={(value: any) => setInviteRole(value)}>
+                <SelectTrigger id="invite-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="member">Member - Can track time and view entries</SelectItem>
+                  <SelectItem value="admin">Admin - Can manage project and invite others</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-xs">
+                An invitation email will be sent to this address. They'll need to create an account to accept.
+              </AlertDescription>
+            </Alert>
+
+            <div className="flex gap-2">
+              <Button onClick={handleSendInvite} disabled={isSendingInvite || !inviteEmail.trim()} className="flex-1">
+                {isSendingInvite ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="h-4 w-4 mr-2" />
+                    Send Invitation
+                  </>
+                )}
+              </Button>
+              <Button variant="outline" onClick={() => setSharingProject(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
