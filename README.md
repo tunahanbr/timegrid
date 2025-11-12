@@ -8,27 +8,52 @@ A modern, brutalist-styled time tracking application with advanced reporting, te
 # Install dependencies
 bun install
 
-# Copy environment variables
+# Set up environment (PostgreSQL + API server required)
 cp .env.example .env
-# Edit .env with your Supabase credentials
+# Edit .env with your database credentials
+
+# Start PostgreSQL (via Docker)
+docker-compose up -d
+
+# Start API server (in another terminal)
+cd server && node index.js
 
 # Start development server
 bun run dev
 ```
 
-## 📚 Documentation
+## 🏗️ Architecture
 
-For detailed implementation guide, features, and setup instructions, see [IMPLEMENTATION_GUIDE.md](./IMPLEMENTATION_GUIDE.md)
+- **Frontend**: React + Vite (port 8080/8081)
+- **API**: Express.js (port 3000)
+- **Database**: PostgreSQL 15 (Docker)
 
-## ✨ Key Features
+## ✨ Features (17 Complete)
 
-- ⏱️ Timer with pause/resume
-- 📊 Dashboard with charts and analytics
-- 🔍 Advanced filtering (date range, projects, tags)
-- 📥 CSV export with filters
-- 👥 Team collaboration (in progress)
-- 🔐 Supabase authentication
-- 💰 Billing and invoicing (planned)
+### Core Time Tracking
+- ⏱️ **Timer** - Start/stop/pause with real-time tracking
+- 📝 **Time Entries** - Full CRUD operations with manual entry
+- 📊 **Dashboard** - Charts, statistics, week/month views
+- 📈 **Reports** - Advanced analytics with custom date ranges and export
+
+### Project & Client Management
+- � **Projects** - Manage projects with colors and hourly rates
+- 👔 **Clients** - Complete client management system
+- 🏷️ **Tags** - Categorize entries with custom tags
+- 💰 **Budgets** - Track project budgets with alerts
+- � **Expenses** - Billable/non-billable expense tracking
+
+### Business Features
+- 🧾 **Invoices** - Generate and export invoices to PDF
+- 👥 **Team** - Invite members with role-based permissions
+- 🔑 **API Keys** - Generate keys for integrations
+- 📥 **Import** - Import from Toggl, Clockify, Harvest (CSV/JSON)
+- � **Integrations** - Connect to 5+ external services
+
+### System
+- 🔐 **Authentication** - Secure login/signup with protected routes
+- ⚙️ **Settings** - Feature toggles, themes, data management
+- ⌨️ **Keyboard Shortcuts** - Global shortcuts for quick navigation
 
 ## 🛠️ Tech Stack
 
