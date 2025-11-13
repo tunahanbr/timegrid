@@ -192,6 +192,18 @@ export const supabase = {
 
     getUser: async () => {
       try {
+        // Check localStorage first (since we're using localStorage for auth)
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          try {
+            const userData = JSON.parse(storedUser);
+            return { data: { user: userData }, error: null };
+          } catch (e) {
+            console.error('Error parsing stored user:', e);
+          }
+        }
+        
+        // Fallback to API call
         return await apiCall('/api/auth/user');
       } catch (error: any) {
         return { data: { user: null }, error: { message: error.message } };

@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Plus, Trash2, Loader2, AlertCircle, Share2, Mail, Edit3 } from "lucide-react";
+import { Plus, Trash2, Loader2, AlertCircle, Share2, Mail, Edit3, CloudOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -44,17 +45,22 @@ export default function ProjectsPage() {
   const [newProjectName, setNewProjectName] = useState("");
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
+  const [newHourlyRate, setNewHourlyRate] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [sharingProject, setSharingProject] = useState<any>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   
+  // Delete confirmation dialog state
+  const [deletingProject, setDeletingProject] = useState<any>(null);
+  
   // Edit project state
   const [editingProject, setEditingProject] = useState<any>(null);
   const [editProjectName, setEditProjectName] = useState("");
   const [editProjectColor, setEditProjectColor] = useState(PRESET_COLORS[0]);
   const [editProjectClient, setEditProjectClient] = useState<string | null>(null);
+  const [editHourlyRate, setEditHourlyRate] = useState("");
 
   const {
     projects,
@@ -79,18 +85,30 @@ export default function ProjectsPage() {
       name: newProjectName.trim(),
       color: selectedColor,
       clientId: selectedClient || undefined,
+      hourlyRate: newHourlyRate ? parseFloat(newHourlyRate) : undefined,
     });
 
     setNewProjectName("");
     setSelectedColor(PRESET_COLORS[0]);
     setSelectedClient(null);
+    setNewHourlyRate("");
     setIsAdding(false);
   };
 
-  const handleDeleteProject = (id: string) => {
-    if (confirm("Are you sure you want to archive this project?")) {
-      deleteProject(id);
-    }
+  const handleDeleteProject = async (id: string) => {
+    console.log('[ProjectsPage] Delete button clicked for project:', id);
+    
+    // Open the delete confirmation dialog instead of using window.confirm
+    const project = projects.find(p => p.id === id);
+    setDeletingProject(project);
+  };
+
+  const confirmDelete = () => {
+    if (!deletingProject) return;
+    
+    console.log('[ProjectsPage] User confirmed delete, calling deleteProject for:', deletingProject.id);
+    deleteProject(deletingProject.id);
+    setDeletingProject(null);
   };
 
   const openEditDialog = (project: any) => {
@@ -98,6 +116,7 @@ export default function ProjectsPage() {
     setEditProjectName(project.name);
     setEditProjectColor(project.color);
     setEditProjectClient(project.clientId || null);
+    setEditHourlyRate(project.hourlyRate ? project.hourlyRate.toString() : "");
   };
 
   const handleUpdateProject = () => {
@@ -111,6 +130,7 @@ export default function ProjectsPage() {
         name: editProjectName.trim(),
         color: editProjectColor,
         clientId: editProjectClient || undefined,
+        hourlyRate: editHourlyRate ? parseFloat(editHourlyRate) : undefined,
       },
     });
 
@@ -118,6 +138,7 @@ export default function ProjectsPage() {
     setEditProjectName("");
     setEditProjectColor(PRESET_COLORS[0]);
     setEditProjectClient(null);
+    setEditHourlyRate("");
   };
 
   const handleSendInvite = async () => {
@@ -213,6 +234,22 @@ export default function ProjectsPage() {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <div className="text-sm font-medium">Hourly Rate (Optional)</div>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={newHourlyRate}
+                onChange={(e) => setNewHourlyRate(e.target.value)}
+                className="pl-7"
+              />
+            </div>
+          </div>
           
           <div className="space-y-2">
             <div className="text-sm font-medium">Color</div>
@@ -284,7 +321,15 @@ export default function ProjectsPage() {
                 style={{ backgroundColor: project.color }}
               />
               <div className="flex-1">
-                <div className="font-semibold">{project.name}</div>
+                <div className="flex items-center gap-2">
+                  <div className="font-semibold">{project.name}</div>
+                  {(project as any).isOffline && (
+                    <Badge variant="outline" className="text-xs gap-1">
+                      <CloudOff className="h-3 w-3" />
+                      Not synced
+                    </Badge>
+                  )}
+                </div>
                 <div className="text-sm text-muted-foreground">
                   {project.clientId && (
                     <>
@@ -336,7 +381,7 @@ export default function ProjectsPage() {
           <DialogHeader>
             <DialogTitle>Edit Project</DialogTitle>
             <DialogDescription>
-              Update the project name and color
+              Update the project name, hourly rate, and color
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -366,6 +411,23 @@ export default function ProjectsPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="edit-hourly-rate">Hourly Rate (Optional)</Label>
+              <div className="relative mt-2">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                <Input
+                  id="edit-hourly-rate"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={editHourlyRate}
+                  onChange={(e) => setEditHourlyRate(e.target.value)}
+                  className="pl-7"
+                />
+              </div>
             </div>
 
             <div>
@@ -476,6 +538,36 @@ export default function ProjectsPage() {
                 Cancel
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deletingProject} onOpenChange={(open) => !open && setDeletingProject(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Project</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete "{deletingProject?.name}"? This action cannot be undone and will remove all time entries associated with this project.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setDeletingProject(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Project
+                </>
+              )}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

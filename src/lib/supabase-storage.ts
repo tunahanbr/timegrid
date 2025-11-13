@@ -59,6 +59,11 @@ export interface UserSettings {
     tags: boolean;
     reports: boolean;
     collaboration: boolean;
+    budgets: boolean;
+    expenses: boolean;
+    apiKeys: boolean;
+    import: boolean;
+    integrations: boolean;
   };
   preferences: {
     theme: 'light' | 'dark' | 'system';
@@ -140,12 +145,18 @@ export const supabaseStorage = {
   },
 
   async deleteProject(id: string) {
+    console.log('[deleteProject] Starting delete for project ID:', id);
+    
     const { error } = await supabase
       .from("projects")
-      .update({ is_archived: true })
+      .delete()
       .eq("id", id);
     
+    console.log('[deleteProject] Delete result - error:', error);
+    
     if (error) throw error;
+    
+    console.log('[deleteProject] Successfully deleted project');
   },
 
   // Time Entries
@@ -355,7 +366,8 @@ export const supabaseStorage = {
   },
 
   async addClient(client: Omit<Client, "id" | "createdAt">, userId: string) {
-    const { data: { user } } = await supabase.auth.getUser();
+    const response = await supabase.auth.getUser();
+    const user = response?.data?.user;
     
     const { data, error } = await supabase
       .from("clients")
@@ -402,14 +414,15 @@ export const supabaseStorage = {
 
   // Team Management
   async getTeamMembers(): Promise<any[]> {
-    const { data: currentUser } = await supabase.auth.getUser();
-    if (!currentUser.user) throw new Error("Not authenticated");
+    const response = await supabase.auth.getUser();
+    const user = response?.data?.user;
+    if (!user) throw new Error("Not authenticated");
 
     // Optimized: Get current user with their team members in a single query
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select("id, team_id")
-      .eq("id", currentUser.user.id)
+      .eq("id", user.id)
       .single();
 
     if (userError) throw userError;
@@ -436,14 +449,15 @@ export const supabaseStorage = {
   },
 
   async inviteTeamMember(email: string, role: 'admin' | 'project_manager' | 'user') {
-    const { data: currentUser } = await supabase.auth.getUser();
-    if (!currentUser.user) throw new Error("Not authenticated");
+    const response = await supabase.auth.getUser();
+    const user = response?.data?.user;
+    if (!user) throw new Error("Not authenticated");
 
     // Get current user's team_id and role
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select("team_id, role")
-      .eq("id", currentUser.user.id)
+      .eq("id", user.id)
       .single();
 
     if (userError) throw userError;
@@ -468,14 +482,15 @@ export const supabaseStorage = {
   },
 
   async removeTeamMember(userId: string) {
-    const { data: currentUser } = await supabase.auth.getUser();
-    if (!currentUser.user) throw new Error("Not authenticated");
+    const response = await supabase.auth.getUser();
+    const user = response?.data?.user;
+    if (!user) throw new Error("Not authenticated");
 
     // Get current user's role
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select("role")
-      .eq("id", currentUser.user.id)
+      .eq("id", user.id)
       .single();
 
     if (userError) throw userError;
@@ -495,15 +510,16 @@ export const supabaseStorage = {
   },
 
   async createTeam(name: string): Promise<any> {
-    const { data: currentUser } = await supabase.auth.getUser();
-    if (!currentUser.user) throw new Error("Not authenticated");
+    const response = await supabase.auth.getUser();
+    const user = response?.data?.user;
+    if (!user) throw new Error("Not authenticated");
 
     // Create team
     const { data: team, error: teamError } = await supabase
       .from("teams")
       .insert({
         name,
-        created_by: currentUser.user.id,
+        created_by: user.id,
       })
       .select()
       .single();
@@ -517,7 +533,7 @@ export const supabaseStorage = {
         team_id: team.id,
         role: 'admin'
       })
-      .eq("id", currentUser.user.id);
+      .eq("id", user.id);
 
     if (userError) throw userError;
 
@@ -526,22 +542,27 @@ export const supabaseStorage = {
 
   // User Settings
   async getUserSettings(): Promise<UserSettings | null> {
-    const { data: currentUser } = await supabase.auth.getUser();
-    if (!currentUser.user) throw new Error("Not authenticated");
+    const response = await supabase.auth.getUser();
+    const user = response?.data?.user;
+    if (!user) return null; // Return null instead of throwing error
 
     const { data, error } = await supabase
       .from("users")
       .select("settings")
-      .eq("id", currentUser.user.id)
+      .eq("id", user.id)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Error fetching user settings:", error);
+      return null;
+    }
     return data?.settings as UserSettings || null;
   },
 
   async updateUserSettings(settings: Partial<UserSettings>): Promise<void> {
-    const { data: currentUser } = await supabase.auth.getUser();
-    if (!currentUser.user) throw new Error("Not authenticated");
+    const response = await supabase.auth.getUser();
+    const user = response?.data?.user;
+    if (!user) throw new Error("Not authenticated");
 
     // Get current settings
     const current = await this.getUserSettings();
@@ -555,7 +576,7 @@ export const supabaseStorage = {
     const { error } = await supabase
       .from("users")
       .update({ settings: merged })
-      .eq("id", currentUser.user.id);
+      .eq("id", user.id);
 
     if (error) throw error;
   },
@@ -673,8 +694,9 @@ export const supabaseStorage = {
     email: string,
     role: 'admin' | 'project_manager' | 'user'
   ): Promise<ProjectInvitation> {
-    const { data: currentUser } = await supabase.auth.getUser();
-    if (!currentUser.user) throw new Error("Not authenticated");
+    const response = await supabase.auth.getUser();
+    const user = response?.data?.user;
+    if (!user) throw new Error("Not authenticated");
 
     const { data, error } = await supabase
       .from("project_invitations")
@@ -682,7 +704,7 @@ export const supabaseStorage = {
         project_id: projectId,
         email,
         role,
-        invited_by: currentUser.user.id,
+        invited_by: user.id,
       })
       .select()
       .single();
@@ -695,8 +717,9 @@ export const supabaseStorage = {
   },
 
   async acceptProjectInvitation(token: string): Promise<void> {
-    const { data: currentUser } = await supabase.auth.getUser();
-    if (!currentUser.user) throw new Error("Not authenticated");
+    const response = await supabase.auth.getUser();
+    const user = response?.data?.user;
+    if (!user) throw new Error("Not authenticated");
 
     // Get invitation
     const { data: invitation, error: invError } = await supabase
@@ -710,14 +733,14 @@ export const supabaseStorage = {
     if (invError) throw new Error("Invalid or expired invitation");
 
     // Check if user's email matches
-    if (invitation.email !== currentUser.user.email) {
+    if (invitation.email !== user.email) {
       throw new Error("This invitation is for a different email address");
     }
 
     // Add user to project
     await this.addProjectMember(
       invitation.project_id,
-      currentUser.user.id,
+      user.id,
       invitation.role,
       invitation.role !== 'user',
       invitation.role === 'admin' || invitation.role === 'project_manager'

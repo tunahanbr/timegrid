@@ -1,15 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { storage } from "@/lib/storage";
-import { Download, Trash2, Settings as SettingsIcon, Save } from "lucide-react";
+import { Download, Trash2, Settings as SettingsIcon, Save, Loader2, Moon, Sun } from "lucide-react";
 import { toast } from "sonner";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useState, useEffect } from "react";
+import { useUserSettings } from "@/hooks/useUserSettings";
 
-// Feature settings stored in localStorage
+// Feature settings interface
 interface FeatureSettings {
   clients: boolean;
   invoicing: boolean;
@@ -25,10 +25,7 @@ interface FeatureSettings {
 
 type UserMode = 'personal' | 'freelancer' | 'team';
 
-const STORAGE_KEY = 'timetrack_feature_settings';
-const MODE_KEY = 'timetrack_user_mode';
-
-const defaultSettings: FeatureSettings = {
+const defaultFeatures: FeatureSettings = {
   clients: true,
   invoicing: true,
   tags: true,
@@ -42,28 +39,63 @@ const defaultSettings: FeatureSettings = {
 };
 
 export default function SettingsPage() {
-  const [features, setFeatures] = useState<FeatureSettings>(defaultSettings);
+  const { settings, isLoading, updateSettings, isUpdating } = useUserSettings();
+  const [features, setFeatures] = useState<FeatureSettings>(defaultFeatures);
   const [userMode, setUserMode] = useState<UserMode>('freelancer');
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [hasChanges, setHasChanges] = useState(false);
 
+  // Load settings from Supabase when available
   useEffect(() => {
-    // Load saved settings
-    const saved = localStorage.getItem(STORAGE_KEY);
-    const savedMode = localStorage.getItem(MODE_KEY) as UserMode;
-    
-    if (saved) {
-      setFeatures(JSON.parse(saved));
+    if (settings) {
+      // Map settings.features to our FeatureSettings interface
+      const mappedFeatures: FeatureSettings = {
+        clients: settings.features?.clients ?? true,
+        invoicing: settings.features?.invoicing ?? true,
+        tags: settings.features?.tags ?? true,
+        reports: settings.features?.reports ?? true,
+        team: settings.features?.collaboration ?? false,
+        budgets: settings.features?.budgets ?? true,
+        expenses: settings.features?.expenses ?? true,
+        apiKeys: settings.features?.apiKeys ?? false,
+        import: settings.features?.import ?? false,
+        integrations: settings.features?.integrations ?? false,
+      };
+      setFeatures(mappedFeatures);
+      setUserMode(settings.userMode || 'freelancer');
+      setTheme(settings.preferences?.theme === 'light' ? 'light' : 'dark');
     }
-    if (savedMode) {
-      setUserMode(savedMode);
-    }
-  }, []);
+  }, [settings]);
 
   const handleSave = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(features));
-    localStorage.setItem(MODE_KEY, userMode);
-    setHasChanges(false);
-    toast.success("Settings saved! Refresh the page to see changes.");
+    try {
+      // Save to Supabase
+      updateSettings({
+        features: {
+          clients: features.clients,
+          invoicing: features.invoicing,
+          projects: true, // Always enabled
+          tags: features.tags,
+          reports: features.reports,
+          collaboration: features.team,
+          budgets: features.budgets,
+          expenses: features.expenses,
+          apiKeys: features.apiKeys,
+          import: features.import,
+          integrations: features.integrations,
+        },
+        preferences: {
+          theme: theme,
+          defaultView: settings?.preferences?.defaultView || 'timer',
+          weekStart: settings?.preferences?.weekStart || 'monday',
+        },
+        userMode,
+      });
+      setHasChanges(false);
+    } catch (error: any) {
+      console.error("Error saving settings:", error);
+      toast.error(error.message || "Failed to save settings");
+    }
   };
 
   const updateFeature = (feature: keyof FeatureSettings, value: boolean) => {
@@ -140,6 +172,16 @@ export default function SettingsPage() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-8 py-8 max-w-4xl">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-8 py-8 max-w-4xl">
       <div className="flex items-center justify-between mb-8">
@@ -153,9 +195,18 @@ export default function SettingsPage() {
           </p>
         </div>
         {hasChanges && (
-          <Button onClick={handleSave}>
-            <Save className="h-4 w-4 mr-2" />
-            Save Changes
+          <Button onClick={handleSave} disabled={isUpdating}>
+            {isUpdating ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </>
+            )}
           </Button>
         )}
       </div>
@@ -437,7 +488,26 @@ export default function SettingsPage() {
                   Switch between light and dark mode
                 </div>
               </div>
-              <ThemeToggle />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  const newTheme = theme === 'dark' ? 'light' : 'dark';
+                  setTheme(newTheme);
+                  setHasChanges(true);
+                  // Apply theme immediately for preview
+                  document.documentElement.classList.toggle('dark', newTheme === 'dark');
+                  storage.saveTheme(newTheme);
+                }}
+                className="h-9 w-9"
+              >
+                {theme === 'dark' ? (
+                  <Sun className="h-4 w-4" />
+                ) : (
+                  <Moon className="h-4 w-4" />
+                )}
+                <span className="sr-only">Toggle theme</span>
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -487,7 +557,7 @@ export default function SettingsPage() {
             <CardTitle>About</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-1">
-            <p>TimeTrack - Brutalist Time Tracking</p>
+            <p>TimeGrid - Modern Time Tracking</p>
             <p>Built with React, TypeScript, Tailwind CSS, and Supabase</p>
             <p className="mt-4 text-xs">
               {hasChanges && "⚠️ Don't forget to save your changes!"}

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Pencil, Trash2, Building2, Mail, Phone, MapPin, AlertCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, Mail, Phone, MapPin, AlertCircle, CloudOff } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -268,7 +269,15 @@ export default function ClientsPage() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-lg">{client.name}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg">{client.name}</CardTitle>
+                      {(client as any).isOffline && (
+                        <Badge variant="outline" className="text-xs gap-1">
+                          <CloudOff className="h-3 w-3" />
+                          Not synced
+                        </Badge>
+                      )}
+                    </div>
                     {client.company && (
                       <CardDescription className="flex items-center gap-1 mt-1">
                         <Building2 className="h-3 w-3" />

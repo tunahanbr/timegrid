@@ -10,21 +10,29 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// PostgreSQL connection pool
+// PostgreSQL connection pool with optimized settings
 const pool = new Pool({
   host: process.env.VITE_DB_HOST || 'localhost',
   port: parseInt(process.env.VITE_DB_PORT || '5432'),
   database: process.env.VITE_DB_NAME || 'timetrack',
   user: process.env.VITE_DB_USER || 'timetrack',
   password: process.env.VITE_DB_PASSWORD || 'timetrack_dev_password',
-  max: 20,
+  max: 10, // Reduced from 20 (more efficient for small apps)
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 });
 
-// Test connection
+// Simple in-memory cache for user settings (TTL: 5 minutes)
+const settingsCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Only log connection once on startup
+let connectionLogged = false;
 pool.on('connect', () => {
-  console.log('✅ Connected to PostgreSQL database');
+  if (!connectionLogged) {
+    console.log('✅ PostgreSQL connection pool ready');
+    connectionLogged = true;
+  }
 });
 
 pool.on('error', (err) => {
@@ -36,9 +44,32 @@ pool.on('error', (err) => {
 app.use(cors());
 app.use(express.json());
 
+// Request logging middleware (only in development)
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      console.log(`${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+    });
+    next();
+  });
+}
+
 // Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  try {
+    // Quick DB ping
+    await pool.query('SELECT 1');
+    res.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      connections: pool.totalCount,
+      idle: pool.idleCount
+    });
+  } catch (error) {
+    res.status(503).json({ status: 'error', error: error.message });
+  }
 });
 
 // ============================================================================
@@ -46,6 +77,8 @@ app.get('/health', (req, res) => {
 // ============================================================================
 
 app.post('/api/auth/signup', async (req, res) => {
+  const client = await pool.connect();
+  
   try {
     const { email, password, full_name } = req.body;
     
@@ -60,7 +93,7 @@ app.post('/api/auth/signup', async (req, res) => {
       VALUES ($1, $2, $3)
       RETURNING id, email, full_name, avatar_url, created_at
     `;
-    const result = await pool.query(query, [email, password_hash, full_name || null]);
+    const result = await client.query(query, [email, password_hash, full_name || null]);
     
     res.json({ user: result.rows[0], error: null });
   } catch (error) {
@@ -70,10 +103,14 @@ app.post('/api/auth/signup', async (req, res) => {
     } else {
       res.status(500).json({ error: error.message });
     }
+  } finally {
+    client.release();
   }
 });
 
 app.post('/api/auth/signin', async (req, res) => {
+  const client = await pool.connect();
+  
   try {
     const { email, password } = req.body;
     
@@ -82,7 +119,7 @@ app.post('/api/auth/signin', async (req, res) => {
     }
 
     const query = `SELECT * FROM users WHERE email = $1`;
-    const result = await pool.query(query, [email]);
+    const result = await client.query(query, [email]);
     
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -100,6 +137,8 @@ app.post('/api/auth/signin', async (req, res) => {
   } catch (error) {
     console.error('Signin error:', error);
     res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -117,13 +156,43 @@ app.get('/api/auth/user', async (req, res) => {
 // GENERIC CRUD ROUTES
 // ============================================================================
 
+// Helper function to check cache
+function getCachedSettings(userId) {
+  const cached = settingsCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  return null;
+}
+
+// Helper function to set cache
+function setCachedSettings(userId, data) {
+  settingsCache.set(userId, { data, timestamp: Date.now() });
+}
+
+// Helper function to clear cache
+function clearCachedSettings(userId) {
+  settingsCache.delete(userId);
+}
+
 // SELECT - Get all records from a table
 app.get('/api/:table', async (req, res) => {
+  let query = '';
+  const client = await pool.connect(); // Use a dedicated client for this query
+  
   try {
     const { table } = req.params;
-    const { columns = '*', order, ...filters } = req.query;
+    const { columns = '*', order, limit, offset, ...filters } = req.query;
     
-    let query = `SELECT ${columns} FROM ${table}`;
+    // Check cache for user settings
+    if (table === 'users' && columns === 'settings' && filters.id) {
+      const cached = getCachedSettings(filters.id);
+      if (cached) {
+        return res.json({ data: [{ settings: cached }], error: null, count: 1, cached: true });
+      }
+    }
+    
+    query = `SELECT ${columns} FROM ${table}`;
     const values = [];
     
     // Add WHERE clauses for filters (excluding 'order')
@@ -177,18 +246,36 @@ app.get('/api/:table', async (req, res) => {
       query += ` ORDER BY ${column} ${direction.toUpperCase()}`;
     }
     
-    const result = await pool.query(query, values);
+    // Add LIMIT clause if specified
+    if (limit) {
+      query += ` LIMIT ${parseInt(limit)}`;
+    }
+    
+    // Add OFFSET clause if specified
+    if (offset) {
+      query += ` OFFSET ${parseInt(offset)}`;
+    }
+    
+    const result = await client.query(query, values);
+    
+    // Cache user settings
+    if (table === 'users' && columns === 'settings' && filters.id && result.rows[0]) {
+      setCachedSettings(filters.id, result.rows[0].settings);
+    }
+    
     res.json({ data: result.rows, error: null, count: result.rowCount });
   } catch (error) {
     console.error(`Select error for table "${req.params.table}":`, error.message);
-    console.error(`Query: ${query}`);
-    console.error(`Filters: ${JSON.stringify(req.query)}`);
     res.status(500).json({ data: null, error: error.message });
+  } finally {
+    client.release();
   }
 });
 
 // INSERT - Create new record(s)
 app.post('/api/:table', async (req, res) => {
+  const client = await pool.connect();
+  
   try {
     const { table } = req.params;
     const data = Array.isArray(req.body) ? req.body : [req.body];
@@ -208,16 +295,20 @@ app.post('/api/:table', async (req, res) => {
       VALUES ${placeholders}
       RETURNING *
     `;
-    const result = await pool.query(query, flatValues);
+    const result = await client.query(query, flatValues);
     res.json({ data: result.rows, error: null });
   } catch (error) {
     console.error('Insert error:', error);
     res.status(500).json({ data: null, error: error.message });
+  } finally {
+    client.release();
   }
 });
 
 // UPDATE - Update records
 app.patch('/api/:table', async (req, res) => {
+  const client = await pool.connect();
+  
   try {
     const { table } = req.params;
     const { data, filters } = req.body;
@@ -239,20 +330,30 @@ app.patch('/api/:table', async (req, res) => {
     
     const query = `
       UPDATE ${table}
-      SET ${setClause}
+      SET ${setClause}, updated_at = NOW()
       WHERE ${whereClauses.join(' AND ')}
       RETURNING *
     `;
-    const result = await pool.query(query, values);
+    const result = await client.query(query, values);
+    
+    // Clear cache if updating user settings
+    if (table === 'users' && data.settings && filters.id) {
+      clearCachedSettings(filters.id);
+    }
+    
     res.json({ data: result.rows, error: null });
   } catch (error) {
     console.error('Update error:', error);
     res.status(500).json({ data: null, error: error.message });
+  } finally {
+    client.release();
   }
 });
 
 // DELETE - Delete records
 app.delete('/api/:table', async (req, res) => {
+  const client = await pool.connect();
+  
   try {
     const { table } = req.params;
     const filters = req.body;
@@ -266,11 +367,19 @@ app.delete('/api/:table', async (req, res) => {
     const whereClauses = filterKeys.map((key, idx) => `${key} = $${idx + 1}`);
     
     const query = `DELETE FROM ${table} WHERE ${whereClauses.join(' AND ')} RETURNING *`;
-    const result = await pool.query(query, values);
+    const result = await client.query(query, values);
+    
+    // Clear cache if deleting user
+    if (table === 'users' && filters.id) {
+      clearCachedSettings(filters.id);
+    }
+    
     res.json({ data: result.rows, error: null });
   } catch (error) {
     console.error('Delete error:', error);
     res.status(500).json({ data: null, error: error.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -278,7 +387,45 @@ app.delete('/api/:table', async (req, res) => {
 // START SERVER
 // ============================================================================
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`🚀 API Server running on http://localhost:${port}`);
   console.log(`📊 Health check: http://localhost:${port}/health`);
+  console.log(`⚡ Cache enabled (TTL: ${CACHE_TTL / 1000}s)`);
+  console.log(`🔌 Connection pool: max ${pool.options.max} connections`);
 });
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, closing server gracefully...');
+  server.close(async () => {
+    console.log('Server closed');
+    await pool.end();
+    console.log('Database pool closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', async () => {
+  console.log('\nSIGINT received, closing server gracefully...');
+  server.close(async () => {
+    console.log('Server closed');
+    await pool.end();
+    console.log('Database pool closed');
+    process.exit(0);
+  });
+});
+
+// Clear expired cache entries every minute
+setInterval(() => {
+  const now = Date.now();
+  let cleared = 0;
+  for (const [key, value] of settingsCache.entries()) {
+    if (now - value.timestamp > CACHE_TTL) {
+      settingsCache.delete(key);
+      cleared++;
+    }
+  }
+  if (cleared > 0) {
+    console.log(`🧹 Cleared ${cleared} expired cache entries`);
+  }
+}, 60000);

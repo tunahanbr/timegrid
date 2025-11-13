@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { formatDurationShort, formatDate } from "@/lib/utils-time";
-import { Trash2, Loader2, AlertCircle, Calendar, Download, CheckSquare, Square, Edit3, X } from "lucide-react";
+import { Trash2, Loader2, AlertCircle, Calendar, Download, CheckSquare, Square, Edit3, X, CloudOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -338,8 +338,16 @@ export default function EntriesPage() {
                           style={{ backgroundColor: project?.color || '#888' }}
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm">
-                            {entry.description || "No description"}
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium text-sm">
+                              {entry.description || "No description"}
+                            </div>
+                            {(entry as any).isOffline && (
+                              <Badge variant="outline" className="text-xs gap-1">
+                                <CloudOff className="h-3 w-3" />
+                                Not synced
+                              </Badge>
+                            )}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {project?.name || "Unknown project"}

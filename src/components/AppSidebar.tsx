@@ -10,46 +10,24 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { useState, useEffect } from "react";
-
-interface FeatureSettings {
-  clients: boolean;
-  invoicing: boolean;
-  tags: boolean;
-  reports: boolean;
-  team: boolean;
-  budgets: boolean;
-  expenses: boolean;
-  apiKeys: boolean;
-  import: boolean;
-  integrations: boolean;
-}
-
-const defaultSettings: FeatureSettings = {
-  clients: true,
-  invoicing: true,
-  tags: true,
-  reports: true,
-  team: false,
-  budgets: true,
-  expenses: true,
-  apiKeys: false,
-  import: false,
-  integrations: false,
-};
-
-const STORAGE_KEY = 'timetrack_feature_settings';
+import { useUserSettings } from "@/hooks/useUserSettings";
 
 export function AppSidebar() {
-  const [features, setFeatures] = useState<FeatureSettings>(defaultSettings);
-
-  useEffect(() => {
-    // Load feature settings from localStorage
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      setFeatures(JSON.parse(saved));
-    }
-  }, []);
+  const { settings } = useUserSettings();
+  
+  // Map UserSettings to feature flags
+  const features = {
+    clients: settings?.features?.clients ?? true,
+    invoicing: settings?.features?.invoicing ?? true,
+    tags: settings?.features?.tags ?? true,
+    reports: settings?.features?.reports ?? true,
+    team: settings?.features?.collaboration ?? false,
+    budgets: settings?.features?.budgets ?? true,
+    expenses: settings?.features?.expenses ?? true,
+    apiKeys: settings?.features?.apiKeys ?? false,
+    import: settings?.features?.import ?? false,
+    integrations: settings?.features?.integrations ?? false,
+  };
 
   const navigation = [
     { name: "Timer", href: "/", icon: Timer, enabled: true },
@@ -83,7 +61,7 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup className="pt-8">
           <div className="px-6 mb-8">
-            <h1 className="text-xl font-bold tracking-tight">TimeTrack</h1>
+            <h1 className="text-xl font-bold tracking-tight">TimeGrid</h1>
           </div>
           
           <SidebarGroupContent>

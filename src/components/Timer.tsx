@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Play, Pause, Square, Plus, Clock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { storage, TimerState } from "@/lib/storage";
@@ -28,6 +28,7 @@ import { useTags } from "@/hooks/useTags";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { Badge } from "@/components/ui/badge";
 import { X as XIcon } from "lucide-react";
+import { useTauriEvents } from "@/hooks/useTauriEvents";
 
 export function Timer() {
   const [timerState, setTimerState] = useState<TimerState>(storage.getTimerState());
@@ -48,6 +49,25 @@ export function Timer() {
   const { tags, isLoading: isLoadingTags } = useTags();
   const { addEntry, isAdding } = useTimeEntries();
 
+  // Update menu bar title when timer state changes (Tauri only)
+  useEffect(() => {
+    const updateMenuBar = async () => {
+      if (typeof window === 'undefined' || !('__TAURI__' in window)) return;
+
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const elapsed = currentTime > 0 ? formatDuration(currentTime) : "";
+        const project = projects?.find(p => p.id === timerState.currentProjectId)?.name || "";
+        
+        await invoke('update_tray_title', { elapsed, project });
+      } catch (error) {
+        console.error('Failed to update menu bar:', error);
+      }
+    };
+
+    updateMenuBar();
+  }, [currentTime, timerState.currentProjectId, projects]);
+
   useEffect(() => {
     setDescription(timerState.currentDescription);
   }, [timerState.currentDescription]);
@@ -66,6 +86,18 @@ export function Timer() {
 
     return () => clearInterval(interval);
   }, [timerState]);
+
+  // Listen for timer state changes from other windows (sync)
+  useEffect(() => {
+    import('@/lib/timer-sync').then(({ onTimerStateChange }) => {
+      const cleanup = onTimerStateChange((newState) => {
+        console.log('[Timer] Syncing timer state from other window:', newState);
+        setTimerState(newState);
+      });
+      
+      return cleanup;
+    });
+  }, []);
 
   const startTimer = () => {
     if (!timerState.currentProjectId) {
@@ -133,6 +165,13 @@ export function Timer() {
     storage.saveTimerState(newState);
     setDescription("");
     setSelectedTags([]);
+
+    // Clear menu bar (Tauri only)
+    if (typeof window !== 'undefined' && '__TAURI__' in window) {
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        invoke('update_tray_title', { elapsed: "", project: "" }).catch(console.error);
+      });
+    }
   };
 
   const cancelTimer = () => {
@@ -190,6 +229,19 @@ export function Timer() {
   const isIdle = !timerState.isRunning;
   const isRunning = timerState.isRunning && !timerState.isPaused;
   const isPaused = timerState.isRunning && timerState.isPaused;
+
+  // Tauri system tray integration
+  const handleToggleTimer = useCallback(() => {
+    if (isIdle) {
+      startTimer();
+    } else if (isRunning) {
+      pauseTimer();
+    } else if (isPaused) {
+      resumeTimer();
+    }
+  }, [isIdle, isRunning, isPaused]);
+
+  useTauriEvents(handleToggleTimer);
 
   // Keyboard shortcuts
   useKeyboardShortcuts([

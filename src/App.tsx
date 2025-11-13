@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-route
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { SyncIndicator } from "@/components/SyncIndicator";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import TimerPage from "./pages/TimerPage";
@@ -26,6 +27,7 @@ import IntegrationsPage from "./pages/IntegrationsPage";
 import LoginPage from "./pages/LoginPage";
 import SignUpPage from "./pages/SignUpPage";
 import NotFound from "./pages/NotFound";
+import TimerWidgetPage from "./pages/TimerWidgetPage";
 import { storage } from "@/lib/storage";
 import { useEffect, useState } from "react";
 import { formatDurationShort } from "@/lib/utils-time";
@@ -51,6 +53,14 @@ const queryClient = new QueryClient({
 
 // Initialize app on load
 initializeApp();
+
+// Listen for offline sync completion to refetch queries
+window.addEventListener('offline-sync-complete', () => {
+  console.log('[App] Offline sync completed, refetching queries...');
+  queryClient.invalidateQueries({ queryKey: ['projects'] });
+  queryClient.invalidateQueries({ queryKey: ['time-entries'] });
+  queryClient.invalidateQueries({ queryKey: ['clients'] });
+});
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const [todayTotal, setTodayTotal] = useState(0);
@@ -115,7 +125,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <header className="h-14 border-b border-border flex items-center justify-between px-8">
+          <header className="h-14 border-b border-border flex items-center justify-between px-8" data-tauri-drag-region>
             <div className="flex items-center gap-6">
               <SidebarTrigger />
               <div className="text-sm font-medium">
@@ -128,6 +138,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               )}
             </div>
             <div className="flex items-center gap-2">
+              <SyncIndicator />
               <ThemeToggle />
               {user && (
                 <Button variant="ghost" size="sm" onClick={handleSignOut}>
@@ -148,16 +159,27 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignUpPage />} />
+const App = () => {
+  const isWidgetRoute = window.location.pathname === '/timer-widget';
+  
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
+          {!isWidgetRoute && <Toaster />}
+          {!isWidgetRoute && <Sonner />}
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignUpPage />} />
+              <Route 
+                path="/timer-widget" 
+                element={
+                  <ProtectedRoute>
+                    <TimerWidgetPage />
+                  </ProtectedRoute>
+                } 
+              />
             <Route
               path="/*"
               element={
@@ -190,6 +212,7 @@ const App = () => (
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>
-);
+  );
+};
 
 export default App;

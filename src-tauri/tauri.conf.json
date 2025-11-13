@@ -1,0 +1,77 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "TimeGrid",
+  "version": "1.0.0",
+  "identifier": "com.timegrid.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:8080",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "TimeGrid",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 768,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "visible": true,
+        "hiddenTitle": true,
+        "titleBarStyle": "Overlay",
+        "theme": "Dark",
+        "acceptFirstMouse": true
+      },
+      {
+        "label": "timer-widget",
+        "title": "",
+        "url": "/timer-widget",
+        "width": 320,
+        "height": 440,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "center": false,
+        "focus": true,
+        "transparent": true,
+        "shadow": true,
+        "acceptFirstMouse": true,
+        "hiddenTitle": true
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true,
+      "tooltip": "TimeGrid"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "TimeGrid",
+    "copyright": "Copyright © 2025",
+    "category": "Productivity",
+    "shortDescription": "Advanced time tracking application",
+    "longDescription": "A modern time tracking application with advanced reporting, team collaboration, and billing features."
+  }
+}

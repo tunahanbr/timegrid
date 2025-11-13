@@ -119,6 +119,10 @@ export const storage = {
 
   saveTimerState: (state: TimerState) => {
     localStorage.setItem(STORAGE_KEYS.TIMER, JSON.stringify(state));
+    // Broadcast the change to sync all windows
+    import('./timer-sync').then(({ broadcastTimerState }) => {
+      broadcastTimerState(state);
+    });
   },
 
   // Theme
