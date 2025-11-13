@@ -58,7 +58,7 @@ export class OfflineSync {
     });
   }
 
-  queueOperation(operation: Omit<QueuedOperation, 'id' | 'timestamp' | 'retries'>) {
+  queueOperation(operation: Omit<QueuedOperation, 'id' | 'timestamp' | 'retries'>): string {
     const queuedOp: QueuedOperation = {
       ...operation,
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -80,6 +80,8 @@ export class OfflineSync {
     if (navigator.onLine) {
       this.syncQueue();
     }
+
+    return queuedOp.id;
   }
 
   async syncQueue() {
@@ -135,14 +137,18 @@ export class OfflineSync {
       syncing: false,
       queueSize: this.queue.length,
       lastSync: Date.now(),
+      syncedCount: successfulOps.length,
     });
 
     // Trigger refetch of all data after successful sync
     if (successfulOps.length > 0) {
       this.triggerDataRefresh();
+      
+      // Show success toast
+      this.showSyncSuccessToast(successfulOps.length, failedOps.length);
     }
 
-    console.log('[OfflineSync] Sync complete. Successful:', successfulOps.length, 'Failed:', failedOps.length);
+    console.log('[OfflineSync] Sync complete. Successful:', successfulOps.length, 'Failed:', failedOps.length, 'Queue size:', this.queue.length);
   }
 
   private async triggerDataRefresh() {
@@ -153,6 +159,24 @@ export class OfflineSync {
       console.log('[OfflineSync] Dispatched sync complete event');
     } catch (error) {
       console.error('[OfflineSync] Failed to dispatch sync event:', error);
+    }
+  }
+
+  private async showSyncSuccessToast(successCount: number, failedCount: number) {
+    try {
+      const { toast } = await import('sonner');
+      
+      if (failedCount > 0) {
+        toast.warning(`Synced ${successCount} ${successCount === 1 ? 'item' : 'items'}`, {
+          description: `${failedCount} ${failedCount === 1 ? 'item' : 'items'} failed to sync and will be retried`,
+        });
+      } else {
+        toast.success(`All changes synced!`, {
+          description: `Successfully synced ${successCount} ${successCount === 1 ? 'item' : 'items'}`,
+        });
+      }
+    } catch (error) {
+      console.error('[OfflineSync] Failed to show toast:', error);
     }
   }
 
@@ -185,14 +209,25 @@ export class OfflineSync {
     // Import the storage functions dynamically to avoid circular dependencies
     const { supabaseStorage } = await import('./supabase-storage');
 
+    console.log('[OfflineSync] ========== EXECUTING OPERATION ==========');
+    console.log('[OfflineSync] Type:', operation.type);
+    console.log('[OfflineSync] Entity:', operation.entity);
+    console.log('[OfflineSync] Data:', JSON.stringify(operation.data, null, 2));
+
     switch (operation.entity) {
       case 'project':
         if (operation.type === 'add' || operation.type === 'create') {
-          await supabaseStorage.addProject(operation.data, operation.data.userId);
+          console.log('[OfflineSync] Calling addProject with:', operation.data.name);
+          const result = await supabaseStorage.addProject(operation.data, operation.data.userId);
+          console.log('[OfflineSync] Project added successfully:', result);
         } else if (operation.type === 'update') {
+          console.log('[OfflineSync] Calling updateProject:', operation.data.id);
           await supabaseStorage.updateProject(operation.data.id, operation.data.updates);
+          console.log('[OfflineSync] Project updated successfully');
         } else if (operation.type === 'delete') {
+          console.log('[OfflineSync] Calling deleteProject:', operation.data.id);
           await supabaseStorage.deleteProject(operation.data.id);
+          console.log('[OfflineSync] Project deleted successfully');
         }
         break;
 
@@ -201,11 +236,17 @@ export class OfflineSync {
           // Get userId from operation data
           const userId = operation.data.userId;
           if (!userId) throw new Error('userId is required for addEntry');
-          await supabaseStorage.addEntry(operation.data, userId);
+          console.log('[OfflineSync] Calling addEntry for project:', operation.data.projectId);
+          const result = await supabaseStorage.addEntry(operation.data, userId);
+          console.log('[OfflineSync] Entry added successfully:', result);
         } else if (operation.type === 'update') {
+          console.log('[OfflineSync] Calling updateEntry:', operation.data.id);
           await supabaseStorage.updateEntry(operation.data.id, operation.data.updates);
+          console.log('[OfflineSync] Entry updated successfully');
         } else if (operation.type === 'delete') {
+          console.log('[OfflineSync] Calling deleteEntry:', operation.data.id);
           await supabaseStorage.deleteEntry(operation.data.id);
+          console.log('[OfflineSync] Entry deleted successfully');
         }
         break;
 
@@ -214,17 +255,25 @@ export class OfflineSync {
           // Get userId from operation data
           const userId = operation.data.userId;
           if (!userId) throw new Error('userId is required for addClient');
-          await supabaseStorage.addClient(operation.data, userId);
+          console.log('[OfflineSync] Calling addClient:', operation.data.name);
+          const result = await supabaseStorage.addClient(operation.data, userId);
+          console.log('[OfflineSync] Client added successfully:', result);
         } else if (operation.type === 'update') {
+          console.log('[OfflineSync] Calling updateClient:', operation.data.id);
           await supabaseStorage.updateClient(operation.data.id, operation.data.updates);
+          console.log('[OfflineSync] Client updated successfully');
         } else if (operation.type === 'delete') {
+          console.log('[OfflineSync] Calling deleteClient:', operation.data.id);
           await supabaseStorage.deleteClient(operation.data.id);
+          console.log('[OfflineSync] Client deleted successfully');
         }
         break;
 
       default:
         throw new Error(`Unknown entity type: ${operation.entity}`);
     }
+    
+    console.log('[OfflineSync] ========== OPERATION COMPLETE ==========');
   }
 
   onStatusChange(callback: (status: SyncStatus) => void) {
@@ -264,6 +313,7 @@ export interface SyncStatus {
   syncing: boolean;
   queueSize?: number;
   lastSync?: number;
+  syncedCount?: number;
 }
 
 // Singleton instance

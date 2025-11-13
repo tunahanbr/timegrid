@@ -77,16 +77,29 @@ export default function ProjectsPage() {
   const { clients } = useClients();
 
   const handleAddProject = () => {
+    console.log('[ProjectsPage] handleAddProject called');
+    console.log('[ProjectsPage] newProjectName:', newProjectName);
+    console.log('[ProjectsPage] navigator.onLine:', navigator.onLine);
+    console.log('[ProjectsPage] addProject function:', typeof addProject, addProject);
+    console.log('[ProjectsPage] isCreating:', isCreating);
+    
     if (!newProjectName.trim()) {
+      console.log('[ProjectsPage] Empty project name, returning');
       return;
     }
 
-    addProject({
-      name: newProjectName.trim(),
-      color: selectedColor,
-      clientId: selectedClient || undefined,
-      hourlyRate: newHourlyRate ? parseFloat(newHourlyRate) : undefined,
-    });
+    console.log('[ProjectsPage] Calling addProject mutation');
+    try {
+      const result = addProject({
+        name: newProjectName.trim(),
+        color: selectedColor,
+        clientId: selectedClient || undefined,
+        hourlyRate: newHourlyRate ? parseFloat(newHourlyRate) : undefined,
+      });
+      console.log('[ProjectsPage] addProject result:', result);
+    } catch (error) {
+      console.error('[ProjectsPage] Error calling addProject:', error);
+    }
 
     setNewProjectName("");
     setSelectedColor(PRESET_COLORS[0]);

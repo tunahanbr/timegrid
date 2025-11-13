@@ -48,19 +48,14 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false, // Don't refetch when window regains focus
       networkMode: 'offlineFirst', // Try cache first, then network
     },
+    mutations: {
+      networkMode: 'always', // CRITICAL: Allow mutations to run even when offline
+    },
   },
 });
 
 // Initialize app on load
 initializeApp();
-
-// Listen for offline sync completion to refetch queries
-window.addEventListener('offline-sync-complete', () => {
-  console.log('[App] Offline sync completed, refetching queries...');
-  queryClient.invalidateQueries({ queryKey: ['projects'] });
-  queryClient.invalidateQueries({ queryKey: ['time-entries'] });
-  queryClient.invalidateQueries({ queryKey: ['clients'] });
-});
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const [todayTotal, setTodayTotal] = useState(0);
@@ -161,6 +156,32 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
 const App = () => {
   const isWidgetRoute = window.location.pathname === '/timer-widget';
+  
+  // Listen for offline sync completion to refetch queries
+  useEffect(() => {
+    const handleSyncComplete = () => {
+      console.log('[App] Offline sync completed, invalidating and refetching queries...');
+      
+      // Invalidate all queries to force a refetch from the server
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['time-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['tags'] });
+      
+      // Also refetch them immediately
+      queryClient.refetchQueries({ queryKey: ['projects'] });
+      queryClient.refetchQueries({ queryKey: ['time-entries'] });
+      queryClient.refetchQueries({ queryKey: ['clients'] });
+      
+      console.log('[App] All queries invalidated and refetching');
+    };
+    
+    window.addEventListener('offline-sync-complete', handleSyncComplete);
+    
+    return () => {
+      window.removeEventListener('offline-sync-complete', handleSyncComplete);
+    };
+  }, []);
   
   return (
     <QueryClientProvider client={queryClient}>

@@ -13,47 +13,68 @@ export function useClients() {
     queryKey: ["clients", user?.id],
     queryFn: async () => {
       try {
+        const offlineClients = await offlineStorage.getOfflineClients();
+        
+        // Try to fetch online data
         const onlineClients = await supabaseStorage.getClients();
-        const offlineClients = offlineStorage.getOfflineClients();
+        
+        // Cache the online data for offline use
+        await offlineStorage.setCachedClients(onlineClients);
         
         // Merge online and offline clients
+        console.log('[useClients] Merging clients - offline:', offlineClients.length, 'online:', onlineClients.length);
         return [...offlineClients, ...onlineClients] as Client[];
       } catch (error: any) {
-        // If database doesn't exist yet, return offline clients only
+        console.error('[useClients] Query error:', error);
+        
+        // On error, use cached online data + offline data
+        const offlineClients = await offlineStorage.getOfflineClients();
+        const cachedClients = await offlineStorage.getCachedClients();
+        
         if (error.code === 'PGRST116' || error.message?.includes('404')) {
           console.warn('Database tables not set up yet. Run migration first.');
-          return offlineStorage.getOfflineClients() as Client[];
         }
-        throw error;
+        
+        console.log('[useClients] Using cached data - offline:', offlineClients.length, 'cached:', cachedClients.length);
+        return [...offlineClients, ...cachedClients] as Client[];
       }
     },
     enabled: !!user,
-    staleTime: 30000, // Cache for 30 seconds
+    staleTime: 30000, // Consider data fresh for 30 seconds
     gcTime: 300000, // Keep in cache for 5 minutes
-    retry: 1, // Only retry once
-    retryDelay: 500, // Wait 500ms before retry
+    retry: false, // Don't retry on failure when offline
   });
 
   const addMutation = useMutation({
     mutationFn: async (client: Omit<Client, "id" | "createdAt">) => {
-      if (!navigator.onLine) {
-        // Queue operation when offline
-        const queueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        await offlineSync.queueOperation({
-          type: 'add',
-          entity: 'client',
-          data: {
-            ...client,
-            userId: user!.id,
-          },
-        });
-        
-        // Store offline for immediate UI update
-        const offlineClient = offlineStorage.addOfflineClient(client, queueId);
-        toast.info("Client saved offline");
-        return offlineClient;
+      try {
+        if (!navigator.onLine) {
+          console.log('[useClients] Adding client offline:', client);
+          
+          // Queue operation when offline
+          const queueId = offlineSync.queueOperation({
+            type: 'add',
+            entity: 'client',
+            data: {
+              ...client,
+              userId: user!.id,
+            },
+          });
+          
+          console.log('[useClients] Queued with ID:', queueId);
+          
+          // Store offline for immediate UI update
+          const offlineClient = await offlineStorage.addOfflineClient(client, queueId);
+          console.log('[useClients] Stored offline client:', offlineClient);
+          
+          toast.info("Client saved offline");
+          return offlineClient;
+        }
+        return supabaseStorage.addClient(client, user!.id);
+      } catch (error) {
+        console.error('[useClients] Error adding client:', error);
+        throw error;
       }
-      return supabaseStorage.addClient(client, user!.id);
     },
     onMutate: async (newClient) => {
       // Only do optimistic updates when online
@@ -79,6 +100,7 @@ export function useClients() {
       return { previousClients };
     },
     onError: (error: any, variables, context) => {
+      console.error('[useClients] Mutation error:', error);
       // Rollback on error
       if (context?.previousClients) {
         queryClient.setQueryData(["clients", user?.id], context.previousClients);
@@ -86,14 +108,27 @@ export function useClients() {
       toast.error(error.message || "Failed to create client");
     },
     onSuccess: (data) => {
+      console.log('[useClients] Client added successfully:', data);
+      console.log('[useClients] Current user?.id:', user?.id);
+      
       if (data && 'isOffline' in data) {
-        // Offline client added
+        // Offline client added - invalidate to refetch from offline storage
+        const queryKey = ["clients", user?.id];
+        console.log('[useClients] Invalidating query with key:', queryKey);
+        
+        // Invalidate and refetch - this will run the queryFn which now includes offline data
+        queryClient.invalidateQueries({ queryKey });
+        queryClient.refetchQueries({ queryKey });
       } else if (data !== null) {
+        // Online client added
         toast.success("Client created");
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["clients", user?.id] });
+      // Only invalidate when online to avoid unnecessary refetches
+      if (navigator.onLine) {
+        queryClient.invalidateQueries({ queryKey: ["clients", user?.id] });
+      }
     },
   });
 
@@ -101,18 +136,27 @@ export function useClients() {
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Client> }) => {
       if (!navigator.onLine) {
         // Queue operation when offline
-        await offlineSync.queueOperation({
+        offlineSync.queueOperation({
           type: 'update',
           entity: 'client',
           data: { id, updates },
         });
+        
+        // Update cached client locally for immediate UI feedback
+        const cachedClients = await offlineStorage.getCachedClients();
+        const updatedCache = cachedClients.map(c => 
+          c.id === id ? { ...c, ...updates } : c
+        );
+        await offlineStorage.setCachedClients(updatedCache);
+        
         toast.info("Update queued (offline)");
-        return;
+        return { id, updates };
       }
       return supabaseStorage.updateClient(id, updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.refetchQueries({ queryKey: ["clients"] });
       if (navigator.onLine) {
         toast.success("Client updated");
       }
@@ -126,11 +170,24 @@ export function useClients() {
     mutationFn: async (id: string) => {
       if (!navigator.onLine) {
         // Queue operation when offline
-        await offlineSync.queueOperation({
+        offlineSync.queueOperation({
           type: 'delete',
           entity: 'client',
           data: { id },
         });
+        
+        // Remove from cached clients locally for immediate UI feedback
+        const cachedClients = await offlineStorage.getCachedClients();
+        const updatedCache = cachedClients.filter(c => c.id !== id);
+        await offlineStorage.setCachedClients(updatedCache);
+        
+        // Also remove from offline clients if it exists there
+        const offlineClients = await offlineStorage.getOfflineClients();
+        const offlineClient = offlineClients.find(c => c.id === id);
+        if (offlineClient?.queueId) {
+          await offlineStorage.removeOfflineClient(offlineClient.queueId);
+        }
+        
         toast.info("Delete queued (offline)");
         return;
       }
@@ -138,6 +195,7 @@ export function useClients() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.refetchQueries({ queryKey: ["clients"] });
       if (navigator.onLine) {
         toast.success("Client deleted");
       }

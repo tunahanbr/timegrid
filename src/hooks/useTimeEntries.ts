@@ -12,13 +12,35 @@ export function useTimeEntries(filters?: any) {
   const { data: entries = [], isLoading, error } = useQuery({
     queryKey: ["time-entries", user?.id, filters],
     queryFn: async () => {
-      const onlineEntries = await supabaseStorage.getEntries(filters);
-      const offlineEntries = offlineStorage.getOfflineEntries();
-      
-      // Merge online and offline entries
-      return [...offlineEntries, ...onlineEntries] as TimeEntry[];
+      console.log('[useTimeEntries] Query function called');
+      try {
+        const offlineEntries = await offlineStorage.getOfflineEntries();
+        console.log('[useTimeEntries] Loaded offline entries:', offlineEntries);
+        
+        // Try to fetch online data
+        const onlineEntries = await supabaseStorage.getEntries(filters);
+        console.log('[useTimeEntries] Loaded online entries:', onlineEntries);
+        
+        // Cache the online data for offline use
+        await offlineStorage.setCachedEntries(onlineEntries);
+        
+        // Merge online and offline entries
+        console.log('[useTimeEntries] Merging entries - offline:', offlineEntries.length, 'online:', onlineEntries.length);
+        return [...offlineEntries, ...onlineEntries] as TimeEntry[];
+      } catch (error) {
+        console.error('[useTimeEntries] Query error:', error);
+        
+        // On error, use cached online data + offline data
+        const offlineEntries = await offlineStorage.getOfflineEntries();
+        const cachedEntries = await offlineStorage.getCachedEntries();
+        
+        console.log('[useTimeEntries] Using cached data - offline:', offlineEntries.length, 'cached:', cachedEntries.length);
+        return [...offlineEntries, ...cachedEntries] as TimeEntry[];
+      }
     },
     enabled: !!user,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    retry: false, // Don't retry on failure when offline
   });
 
   // Real-time subscriptions removed - using polling instead
@@ -26,34 +48,69 @@ export function useTimeEntries(filters?: any) {
 
   const addMutation = useMutation({
     mutationFn: async (entry: Omit<TimeEntry, "id" | "createdAt">) => {
-      if (!navigator.onLine) {
-        // Queue operation when offline
-        const queueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        await offlineSync.queueOperation({
-          type: 'add',
-          entity: 'entry',
-          data: {
-            ...entry,
-            userId: user!.id,
-          },
-        });
-        
-        // Store offline for immediate UI update
-        const offlineEntry = offlineStorage.addOfflineEntry(entry, queueId);
-        toast.info("Entry saved offline");
-        return offlineEntry;
+      console.log('[useTimeEntries] ========== ADD MUTATION CALLED ==========');
+      console.log('[useTimeEntries] Entry data:', entry);
+      console.log('[useTimeEntries] navigator.onLine:', navigator.onLine);
+      console.log('[useTimeEntries] User ID:', user?.id);
+      
+      try {
+        if (!navigator.onLine) {
+          console.log('[useTimeEntries] Adding entry offline:', entry);
+          
+          // Queue operation when offline
+          const queueId = offlineSync.queueOperation({
+            type: 'add',
+            entity: 'entry',
+            data: {
+              ...entry,
+              userId: user!.id,
+            },
+          });
+          
+          console.log('[useTimeEntries] Queued with ID:', queueId);
+          
+          // Store offline for immediate UI update
+          const offlineEntry = await offlineStorage.addOfflineEntry(entry, queueId);
+          console.log('[useTimeEntries] Stored offline entry:', offlineEntry);
+          
+          toast.info("Entry saved offline");
+          return offlineEntry;
+        }
+        return supabaseStorage.addEntry(entry, user!.id);
+      } catch (error) {
+        console.error('[useTimeEntries] Error adding entry:', error);
+        throw error;
       }
-      return supabaseStorage.addEntry(entry, user!.id);
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["time-entries"] });
+    onSuccess: async (data) => {
+      console.log('[useTimeEntries] Entry added successfully:', data);
+      console.log('[useTimeEntries] Current user?.id:', user?.id, 'filters:', filters);
+      
       if (data && 'isOffline' in data) {
-        // Offline entry added
-      } else if (data !== null) {
-        toast.success("Entry added");
+        // Offline entry added - invalidate to refetch from offline storage
+        const queryKey = ["time-entries", user?.id, filters];
+        console.log('[useTimeEntries] Invalidating query with key:', queryKey);
+        
+        // Invalidate and refetch - this will run the queryFn which now includes offline data
+        queryClient.invalidateQueries({ queryKey });
+        
+        try {
+          await queryClient.refetchQueries({ queryKey });
+          console.log('[useTimeEntries] Refetch completed successfully');
+        } catch (error) {
+          console.error('[useTimeEntries] Refetch error (expected when offline):', error);
+        }
+      } else {
+        // Online entry added - refetch to get fresh data
+        queryClient.invalidateQueries({ queryKey: ["time-entries"] });
+        queryClient.refetchQueries({ queryKey: ["time-entries"] });
+        if (data !== null) {
+          toast.success("Entry added");
+        }
       }
     },
     onError: (error: any) => {
+      console.error('[useTimeEntries] Mutation error:', error);
       toast.error(error.message || "Failed to add entry");
     },
   });
@@ -62,18 +119,27 @@ export function useTimeEntries(filters?: any) {
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<TimeEntry> }) => {
       if (!navigator.onLine) {
         // Queue operation when offline
-        await offlineSync.queueOperation({
+        offlineSync.queueOperation({
           type: 'update',
           entity: 'entry',
           data: { id, updates },
         });
+        
+        // Update cached entry locally for immediate UI feedback
+        const cachedEntries = await offlineStorage.getCachedEntries();
+        const updatedCache = cachedEntries.map(e => 
+          e.id === id ? { ...e, ...updates } : e
+        );
+        await offlineStorage.setCachedEntries(updatedCache);
+        
         toast.info("Update queued (offline)");
-        return;
+        return { id, updates };
       }
       return supabaseStorage.updateEntry(id, updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["time-entries"] });
+      queryClient.refetchQueries({ queryKey: ["time-entries"] });
       if (navigator.onLine) {
         toast.success("Entry updated");
       }
@@ -87,11 +153,24 @@ export function useTimeEntries(filters?: any) {
     mutationFn: async (id: string) => {
       if (!navigator.onLine) {
         // Queue operation when offline
-        await offlineSync.queueOperation({
+        offlineSync.queueOperation({
           type: 'delete',
           entity: 'entry',
           data: { id },
         });
+        
+        // Remove from cached entries locally for immediate UI feedback
+        const cachedEntries = await offlineStorage.getCachedEntries();
+        const updatedCache = cachedEntries.filter(e => e.id !== id);
+        await offlineStorage.setCachedEntries(updatedCache);
+        
+        // Also remove from offline entries if it exists there
+        const offlineEntries = await offlineStorage.getOfflineEntries();
+        const offlineEntry = offlineEntries.find(e => e.id === id);
+        if (offlineEntry?.queueId) {
+          await offlineStorage.removeOfflineEntry(offlineEntry.queueId);
+        }
+        
         toast.info("Delete queued (offline)");
         return;
       }
@@ -99,6 +178,7 @@ export function useTimeEntries(filters?: any) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["time-entries"] });
+      queryClient.refetchQueries({ queryKey: ["time-entries"] });
       if (navigator.onLine) {
         toast.success("Entry deleted");
       }

@@ -3,6 +3,7 @@ import { Cloud, CloudOff, RefreshCw, Check } from "lucide-react";
 import { offlineSync, SyncStatus } from "@/lib/offline-sync";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
@@ -19,11 +20,19 @@ export function SyncIndicator() {
 
   useEffect(() => {
     const unsubscribe = offlineSync.onStatusChange((status) => {
+      console.log('[SyncIndicator] Status update:', status);
       setSyncStatus(status);
     });
 
     return unsubscribe;
   }, []);
+
+  const handleManualSync = () => {
+    console.log('[SyncIndicator] Manual sync triggered');
+    console.log('[SyncIndicator] Current queue size:', offlineSync.getQueueSize());
+    console.log('[SyncIndicator] navigator.onLine:', navigator.onLine);
+    offlineSync.syncQueue();
+  };
 
   const getStatusInfo = () => {
     if (syncStatus.status === 'offline') {
@@ -84,19 +93,39 @@ export function SyncIndicator() {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Badge 
-            variant={statusInfo.variant}
-            className={cn(
-              "flex items-center gap-1.5 cursor-help",
-              syncStatus.status === 'offline' && "opacity-70"
+          <div className="flex items-center gap-2">
+            <Badge 
+              variant={statusInfo.variant}
+              className={cn(
+                "flex items-center gap-1.5 cursor-help",
+                syncStatus.status === 'offline' && "opacity-70"
+              )}
+            >
+              <Icon className={cn("h-3 w-3", statusInfo.className)} />
+              <span className="text-xs font-medium">{statusInfo.text}</span>
+            </Badge>
+            
+            {/* Manual sync button when there are queued items and online */}
+            {syncStatus.queueSize! > 0 && syncStatus.status === 'online' && !syncStatus.syncing && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleManualSync}
+                className="h-6 px-2"
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Sync Now
+              </Button>
             )}
-          >
-            <Icon className={cn("h-3 w-3", statusInfo.className)} />
-            <span className="text-xs font-medium">{statusInfo.text}</span>
-          </Badge>
+          </div>
         </TooltipTrigger>
         <TooltipContent>
           <p className="text-sm">{statusInfo.description}</p>
+          {syncStatus.lastSync && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Last synced: {getTimeAgo(syncStatus.lastSync)}
+            </p>
+          )}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

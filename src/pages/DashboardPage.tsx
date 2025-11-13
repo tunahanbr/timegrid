@@ -75,6 +75,7 @@ export default function DashboardPage() {
 
   // Filter entries by time range
   const filteredEntries = useMemo(() => {
+    if (!entries || entries.length === 0) return [];
     const startDate = timeRange === "week" ? weekStart : monthStart;
     return entries.filter((entry) => {
       const entryDate = parseISO(entry.date);
@@ -89,6 +90,10 @@ export default function DashboardPage() {
 
   // Project breakdown data
   const projectData = useMemo(() => {
+    if (!filteredEntries || filteredEntries.length === 0 || !projects || projects.length === 0) {
+      return [];
+    }
+    
     const projectMap = new Map<string, { name: string; time: number; color: string }>();
 
     filteredEntries.forEach((entry) => {
@@ -114,6 +119,14 @@ export default function DashboardPage() {
     const startDate = timeRange === "week" ? weekStart : monthStart;
     const days = eachDayOfInterval({ start: startDate, end: today });
 
+    if (!filteredEntries || filteredEntries.length === 0) {
+      return days.map((day) => ({
+        date: format(day, timeRange === "week" ? "EEE" : "MMM d"),
+        hours: 0,
+        seconds: 0,
+      }));
+    }
+
     return days.map((day) => {
       const dayStr = format(day, "yyyy-MM-dd");
       const dayEntries = filteredEntries.filter((e) => e.date === dayStr);
@@ -129,6 +142,15 @@ export default function DashboardPage() {
 
   // Statistics
   const stats = useMemo(() => {
+    if (!filteredEntries || filteredEntries.length === 0) {
+      return {
+        totalEntries: 0,
+        daysActive: 0,
+        avgPerDay: 0,
+        uniqueProjects: 0,
+      };
+    }
+    
     const daysWithEntries = new Set(filteredEntries.map((e) => e.date)).size;
     const avgPerDay = daysWithEntries > 0 ? totalTime / daysWithEntries : 0;
     const uniqueProjects = new Set(filteredEntries.map((e) => e.projectId)).size;

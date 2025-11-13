@@ -145,6 +145,8 @@ export function Timer() {
     }
 
     // Save to Supabase
+    console.log('[Timer] Calling addEntry');
+    console.log('[Timer] navigator.onLine:', navigator.onLine);
     addEntry({
       projectId: timerState.currentProjectId!,
       description: timerState.currentDescription,
