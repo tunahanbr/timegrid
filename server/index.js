@@ -3,6 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import pkg from 'pg';
 import bcrypt from 'bcryptjs';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import jwt from 'jsonwebtoken';
 
 const { Pool } = pkg;
 dotenv.config();
@@ -39,6 +42,115 @@ pool.on('error', (err) => {
   console.error('❌ Unexpected PostgreSQL error:', err);
   process.exit(-1);
 });
+
+// ============================================================================
+// SECURITY MIDDLEWARE
+// ============================================================================
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false, // Allow inline scripts for development
+  crossOriginEmbedderPolicy: false,
+}));
+
+// CORS - Restrict to frontend origin only
+const allowedOrigins = [
+  'http://localhost:5173', // Vite dev
+  'http://localhost:8080', // Tauri dev
+  'http://localhost:4173', // Vite preview
+  'tauri://localhost', // Tauri production
+  'https://tauri.localhost', // Tauri production (alternative)
+  process.env.FRONTEND_URL, // Production frontend
+].filter(Boolean);
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, Tauri, or curl)
+    if (!origin) return callback(null, true);
+    
+    // Allow any tauri:// protocol
+    if (origin && origin.startsWith('tauri://')) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.warn('⚠️  Blocked CORS request from:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// Rate limiting - General API
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiting - Auth endpoints (stricter)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 5 : 100, // 5 in production, 100 in dev
+  message: 'Too many authentication attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply rate limiting
+app.use('/api/', apiLimiter);
+app.use('/api/auth/', authLimiter);
+
+// Request size limit
+app.use(express.json({ limit: '1mb' }));
+
+// ============================================================================
+// JWT CONFIGURATION & AUTH MIDDLEWARE
+// ============================================================================
+
+// JWT secret (use a strong secret in production)
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_in_production';
+const JWT_EXPIRES_IN = '7d'; // Token valid for 7 days
+
+// Generate JWT token
+function generateToken(user) {
+  return jwt.sign(
+    { 
+      id: user.id, 
+      email: user.email 
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+}
+
+// Verify JWT token middleware
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+    req.user = user; // Attach user info to request
+    next();
+  });
+}
+
+// ============================================================================
+// MIDDLEWARE
+// ============================================================================
 
 // Middleware
 app.use(cors());
@@ -82,9 +194,24 @@ app.post('/api/auth/signup', async (req, res) => {
   try {
     const { email, password, full_name } = req.body;
     
+    // Validate required fields
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
+
+    // Validate email format
+    if (!validateEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Validate password strength
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    }
+
+    // Sanitize inputs
+    const sanitizedEmail = sanitizeString(email).toLowerCase();
+    const sanitizedName = sanitizeString(full_name || '');
 
     const password_hash = await bcrypt.hash(password, 10);
     
@@ -93,9 +220,16 @@ app.post('/api/auth/signup', async (req, res) => {
       VALUES ($1, $2, $3)
       RETURNING id, email, full_name, avatar_url, created_at
     `;
-    const result = await client.query(query, [email, password_hash, full_name || null]);
+    const result = await client.query(query, [sanitizedEmail, password_hash, sanitizedName || null]);
     
-    res.json({ user: result.rows[0], error: null });
+    const user = result.rows[0];
+    const token = generateToken(user);
+    
+    res.json({ 
+      user, 
+      token,
+      error: null 
+    });
   } catch (error) {
     console.error('Signup error:', error);
     if (error.code === '23505') { // Unique violation
@@ -114,12 +248,21 @@ app.post('/api/auth/signin', async (req, res) => {
   try {
     const { email, password } = req.body;
     
+    // Validate required fields
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
+    // Validate email format
+    if (!validateEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Sanitize email
+    const sanitizedEmail = sanitizeString(email).toLowerCase();
+
     const query = `SELECT * FROM users WHERE email = $1`;
-    const result = await client.query(query, [email]);
+    const result = await client.query(query, [sanitizedEmail]);
     
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -133,7 +276,13 @@ app.post('/api/auth/signin', async (req, res) => {
     }
     
     const { password_hash, ...userData } = user;
-    res.json({ user: userData, error: null });
+    const token = generateToken(userData);
+    
+    res.json({ 
+      user: userData, 
+      token,
+      error: null 
+    });
   } catch (error) {
     console.error('Signin error:', error);
     res.status(500).json({ error: error.message });
@@ -143,18 +292,61 @@ app.post('/api/auth/signin', async (req, res) => {
 });
 
 app.post('/api/auth/signout', (req, res) => {
+  // With JWT, signout is handled client-side by removing the token
+  // Optional: implement token blacklist for revocation
   res.json({ error: null });
 });
 
-app.get('/api/auth/user', async (req, res) => {
-  // This would normally use session/JWT token
-  // For now, return null (implement session management as needed)
-  res.json({ user: null, error: null });
+app.get('/api/auth/user', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    // req.user is set by authenticateToken middleware
+    const query = `
+      SELECT id, email, full_name, avatar_url, created_at, updated_at
+      FROM users 
+      WHERE id = $1
+    `;
+    const result = await client.query(query, [req.user.id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ user: result.rows[0], error: null });
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
 });
 
 // ============================================================================
 // GENERIC CRUD ROUTES
 // ============================================================================
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+// Input validation helpers
+function validateEmail(email) {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
+function sanitizeString(str) {
+  if (typeof str !== 'string') return '';
+  return str.trim().substring(0, 500); // Max 500 chars
+}
+
+function validateRequired(fields, body) {
+  const missing = fields.filter(field => !body[field]);
+  if (missing.length > 0) {
+    throw new Error(`Missing required fields: ${missing.join(', ')}`);
+  }
+}
 
 // Helper function to check cache
 function getCachedSettings(userId) {
@@ -175,14 +367,20 @@ function clearCachedSettings(userId) {
   settingsCache.delete(userId);
 }
 
-// SELECT - Get all records from a table
-app.get('/api/:table', async (req, res) => {
+// SELECT - Get all records from a table with pagination support
+app.get('/api/:table', authenticateToken, async (req, res) => {
   let query = '';
+  let countQuery = '';
   const client = await pool.connect(); // Use a dedicated client for this query
   
   try {
     const { table } = req.params;
-    const { columns = '*', order, limit, offset, ...filters } = req.query;
+    const { columns = '*', order, limit, offset, page, ...filters } = req.query;
+    
+    // Calculate offset from page if provided
+    const pageNum = page ? parseInt(page) : null;
+    const limitNum = limit ? parseInt(limit) : (pageNum ? 50 : null); // Default 50 per page
+    const offsetNum = pageNum && limitNum ? (pageNum - 1) * limitNum : (offset ? parseInt(offset) : null);
     
     // Check cache for user settings
     if (table === 'users' && columns === 'settings' && filters.id) {
@@ -247,23 +445,62 @@ app.get('/api/:table', async (req, res) => {
     }
     
     // Add LIMIT clause if specified
-    if (limit) {
-      query += ` LIMIT ${parseInt(limit)}`;
+    if (limitNum) {
+      query += ` LIMIT ${limitNum}`;
     }
     
     // Add OFFSET clause if specified
-    if (offset) {
-      query += ` OFFSET ${parseInt(offset)}`;
+    if (offsetNum) {
+      query += ` OFFSET ${offsetNum}`;
     }
     
+    // Execute main query
     const result = await client.query(query, values);
+    
+    // Get total count if pagination is requested
+    let totalCount = result.rowCount;
+    let pagination = null;
+    
+    if (pageNum && limitNum) {
+      // Build count query (reuse WHERE clause)
+      countQuery = `SELECT COUNT(*) as total FROM ${table}`;
+      
+      if (values.length > 0) {
+        // Extract WHERE clause from the original query
+        const whereMatch = query.match(/WHERE (.+?)(ORDER BY|LIMIT|$)/);
+        if (whereMatch) {
+          countQuery += ` WHERE ${whereMatch[1].trim()}`;
+        }
+      }
+      
+      const countResult = await client.query(countQuery, values.slice(0, values.length - (limitNum ? 0 : 0)));
+      totalCount = parseInt(countResult.rows[0].total);
+      
+      pagination = {
+        page: pageNum,
+        limit: limitNum,
+        total: totalCount,
+        pages: Math.ceil(totalCount / limitNum),
+        hasMore: pageNum * limitNum < totalCount
+      };
+    }
     
     // Cache user settings
     if (table === 'users' && columns === 'settings' && filters.id && result.rows[0]) {
       setCachedSettings(filters.id, result.rows[0].settings);
     }
     
-    res.json({ data: result.rows, error: null, count: result.rowCount });
+    const response = { 
+      data: result.rows, 
+      error: null, 
+      count: result.rowCount 
+    };
+    
+    if (pagination) {
+      response.pagination = pagination;
+    }
+    
+    res.json(response);
   } catch (error) {
     console.error(`Select error for table "${req.params.table}":`, error.message);
     res.status(500).json({ data: null, error: error.message });
@@ -273,7 +510,7 @@ app.get('/api/:table', async (req, res) => {
 });
 
 // INSERT - Create new record(s)
-app.post('/api/:table', async (req, res) => {
+app.post('/api/:table', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   
   try {
@@ -306,7 +543,7 @@ app.post('/api/:table', async (req, res) => {
 });
 
 // UPDATE - Update records
-app.patch('/api/:table', async (req, res) => {
+app.patch('/api/:table', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   
   try {
@@ -351,7 +588,7 @@ app.patch('/api/:table', async (req, res) => {
 });
 
 // DELETE - Delete records
-app.delete('/api/:table', async (req, res) => {
+app.delete('/api/:table', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   
   try {

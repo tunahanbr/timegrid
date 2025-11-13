@@ -203,8 +203,8 @@ export default function ProjectsPage() {
 
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
-          <p className="text-sm text-muted-foreground mt-2">
+          <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Projects</h1>
+          <p className="text-sm text-muted-foreground mt-2" role="status" aria-live="polite">
             {isLoading ? "Loading..." : `${projects.length} projects`}
           </p>
         </div>
@@ -212,14 +212,16 @@ export default function ProjectsPage() {
           variant="default"
           onClick={() => setIsAdding(!isAdding)}
           disabled={isLoading}
+          aria-label={isAdding ? "Cancel creating new project" : "Create new project"}
+          aria-expanded={isAdding}
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4" aria-hidden="true" />
           New Project
         </Button>
       </div>
 
       {isAdding && (
-        <div className="mb-8 p-6 border border-border rounded bg-surface space-y-4 animate-slide-in">
+        <div className="mb-8 p-6 border border-border rounded bg-surface space-y-4 animate-slide-in" role="form" aria-label="Create new project form">
           <Input
             placeholder="Project name"
             value={newProjectName}
@@ -229,12 +231,14 @@ export default function ProjectsPage() {
               if (e.key === 'Escape') setIsAdding(false);
             }}
             autoFocus
+            aria-label="Project name"
+            aria-required="true"
           />
           
           <div className="space-y-2">
             <div className="text-sm font-medium">Client (Optional)</div>
             <Select value={selectedClient || "none"} onValueChange={(value) => setSelectedClient(value === "none" ? null : value)}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Select client for project">
                 <SelectValue placeholder="Select a client (optional)" />
               </SelectTrigger>
               <SelectContent>
@@ -251,7 +255,7 @@ export default function ProjectsPage() {
           <div className="space-y-2">
             <div className="text-sm font-medium">Hourly Rate (Optional)</div>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true">$</span>
               <Input
                 type="number"
                 min="0"
@@ -260,13 +264,14 @@ export default function ProjectsPage() {
                 value={newHourlyRate}
                 onChange={(e) => setNewHourlyRate(e.target.value)}
                 className="pl-7"
+                aria-label="Hourly rate in dollars"
               />
             </div>
           </div>
           
           <div className="space-y-2">
-            <div className="text-sm font-medium">Color</div>
-            <div className="grid grid-cols-12 gap-2">
+            <div className="text-sm font-medium" id="color-picker-label">Color</div>
+            <div className="grid grid-cols-12 gap-2" role="radiogroup" aria-labelledby="color-picker-label">
               {PRESET_COLORS.map((color) => (
                 <button
                   key={color}
@@ -277,24 +282,35 @@ export default function ProjectsPage() {
                     boxShadow: selectedColor === color ? '0 0 0 1px black' : 'none',
                   }}
                   onClick={() => setSelectedColor(color)}
-                  aria-label={color}
+                  aria-label={`Select color ${color}`}
+                  role="radio"
+                  aria-checked={selectedColor === color}
                 />
               ))}
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button variant="default" onClick={handleAddProject} disabled={isCreating}>
+          <div className="flex gap-2" role="group" aria-label="Create project form actions">
+            <Button 
+              variant="default" 
+              onClick={handleAddProject} 
+              disabled={isCreating}
+              aria-label={isCreating ? "Creating project" : "Create project"}
+            >
               {isCreating ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
                   Creating...
                 </>
               ) : (
                 "Create Project"
               )}
             </Button>
-            <Button variant="outline" onClick={() => setIsAdding(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsAdding(false)}
+              aria-label="Cancel creating project"
+            >
               Cancel
             </Button>
           </div>
@@ -352,22 +368,24 @@ export default function ProjectsPage() {
                   {project.hourlyRate ? `$${project.hourlyRate}/hr` : "No rate set"}
                 </div>
               </div>
-              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity" role="group" aria-label="Project actions">
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => openEditDialog(project)}
                   title="Edit project"
+                  aria-label={`Edit project ${project.name}`}
                 >
-                  <Edit3 className="h-4 w-4" />
+                  <Edit3 className="h-4 w-4" aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => setSharingProject(project)}
                   title="Share project"
+                  aria-label={`Share project ${project.name}`}
                 >
-                  <Share2 className="h-4 w-4" />
+                  <Share2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -375,11 +393,12 @@ export default function ProjectsPage() {
                   onClick={() => handleDeleteProject(project.id)}
                   disabled={isDeleting}
                   title="Archive project"
+                  aria-label={`Archive project ${project.name}`}
                 >
                   {isDeleting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   ) : (
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
                   )}
                 </Button>
               </div>

@@ -31,8 +31,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Transparent draggable title bar area for native traffic lights */}
+      <div 
+        className="h-12 flex-shrink-0" 
+        data-tauri-drag-region
+        aria-label="Drag to move window"
+      />
+      
+      <div className="flex-1 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold">Sign in</CardTitle>
           <CardDescription>Enter your credentials to access your account</CardDescription>
@@ -77,6 +85,7 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
+      </div>
     </div>
   );
 }

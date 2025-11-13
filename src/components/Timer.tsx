@@ -418,15 +418,16 @@ export function Timer() {
           )}
         </div>
 
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex items-center justify-center gap-4" role="group" aria-label="Timer controls">
           {isIdle && (
             <Button
               variant="timer"
               size="timer"
               onClick={startTimer}
               className="min-w-[200px]"
+              aria-label="Start timer"
             >
-              <Play className="h-5 w-5" />
+              <Play className="h-5 w-5" aria-hidden="true" />
               START
             </Button>
           )}
@@ -437,8 +438,9 @@ export function Timer() {
                 variant="outline"
                 size="icon"
                 onClick={pauseTimer}
+                aria-label="Pause timer"
               >
-                <Pause className="h-4 w-4" />
+                <Pause className="h-4 w-4" aria-hidden="true" />
               </Button>
               <Button
                 variant="timer"
@@ -446,8 +448,9 @@ export function Timer() {
                 onClick={stopTimer}
                 disabled={isAdding}
                 className="min-w-[200px]"
+                aria-label={isAdding ? "Saving time entry" : "Stop timer and save"}
               >
-                <Square className="h-5 w-5" />
+                <Square className="h-5 w-5" aria-hidden="true" />
                 {isAdding ? "SAVING..." : "STOP"}
               </Button>
               <Button
@@ -455,8 +458,9 @@ export function Timer() {
                 size="icon"
                 onClick={cancelTimer}
                 title="Cancel timer (Esc)"
+                aria-label="Cancel timer without saving"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </>
           )}
@@ -468,8 +472,9 @@ export function Timer() {
                 size="timer"
                 onClick={resumeTimer}
                 className="min-w-[200px]"
+                aria-label="Resume timer"
               >
-                <Play className="h-5 w-5" />
+                <Play className="h-5 w-5" aria-hidden="true" />
                 RESUME
               </Button>
               <Button
@@ -477,16 +482,18 @@ export function Timer() {
                 size="icon"
                 onClick={stopTimer}
                 title="Stop and save"
+                aria-label="Stop timer and save entry"
               >
-                <Square className="h-4 w-4" />
+                <Square className="h-4 w-4" aria-hidden="true" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={cancelTimer}
                 title="Cancel timer (Esc)"
+                aria-label="Cancel timer without saving"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </>
           )}
@@ -496,18 +503,18 @@ export function Timer() {
       {/* Manual Entry Section */}
       <div className="mt-8 pt-8 border-t">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Manual Entry</h2>
+          <h2 className="text-xl font-semibold" role="heading" aria-level={2}>Manual Entry</h2>
           <Dialog open={isManualDialogOpen} onOpenChange={setIsManualDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline">
-                <Plus className="h-4 w-4 mr-2" />
+              <Button variant="outline" aria-label="Open dialog to add manual time entry">
+                <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
                 Add Manual Entry
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[500px]" aria-labelledby="manual-entry-title" aria-describedby="manual-entry-description">
               <DialogHeader>
-                <DialogTitle>Add Manual Time Entry</DialogTitle>
-                <DialogDescription>
+                <DialogTitle id="manual-entry-title">Add Manual Time Entry</DialogTitle>
+                <DialogDescription id="manual-entry-description">
                   Add a time entry without using the timer
                 </DialogDescription>
               </DialogHeader>
@@ -596,13 +603,16 @@ export function Timer() {
                             variant="secondary"
                             className="flex items-center gap-1"
                             style={tagData ? { backgroundColor: tagData.color + '20', color: tagData.color } : {}}
+                            role="group"
+                            aria-label={`Tag: ${tag}`}
                           >
                             {tag}
                             <button
                               onClick={() => setManualTags(manualTags.filter(t => t !== tag))}
                               className="ml-1 hover:bg-black/10 rounded-full p-0.5"
+                              aria-label={`Remove tag ${tag}`}
                             >
-                              <XIcon className="h-3 w-3" />
+                              <XIcon className="h-3 w-3" aria-hidden="true" />
                             </button>
                           </Badge>
                         );
@@ -641,18 +651,20 @@ export function Timer() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-2" role="group" aria-label="Manual entry form actions">
                 <Button
                   variant="outline"
                   onClick={() => setIsManualDialogOpen(false)}
+                  aria-label="Cancel and close manual entry dialog"
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={addManualEntry}
                   disabled={isAdding}
+                  aria-label={isAdding ? "Adding manual time entry" : "Add manual time entry"}
                 >
-                  <Clock className="h-4 w-4 mr-2" />
+                  <Clock className="h-4 w-4 mr-2" aria-hidden="true" />
                   {isAdding ? "Adding..." : "Add Entry"}
                 </Button>
               </div>

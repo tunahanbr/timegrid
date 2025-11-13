@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Start background tray updater for Tauri
 import { startTrayUpdater } from "./lib/tray-updater";
@@ -15,4 +16,8 @@ if (typeof window !== 'undefined' && '__TAURI__' in window) {
   console.log('[Main] Not in Tauri environment');
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);

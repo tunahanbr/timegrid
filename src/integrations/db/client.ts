@@ -3,15 +3,32 @@
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-// Helper function for API calls
+// Helper to get auth token
+function getAuthHeaders() {
+  const token = localStorage.getItem('auth_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
+// Helper function for API calls with authentication
 async function apiCall(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
       ...options.headers,
     },
   });
+  
+  // Handle token expiration
+  if (response.status === 401 || response.status === 403) {
+    // Token expired or invalid - clear it
+    localStorage.removeItem('auth_token');
+    // Optionally redirect to login
+    if (window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
+      window.location.href = '/login';
+    }
+  }
   
   return response.json();
 }
@@ -23,6 +40,8 @@ class QueryBuilder {
   private selectColumns: string = '*';
   private orderBy: string | null = null;
   private limitCount: number | null = null;
+  private offsetCount: number | null = null;
+  private pageNumber: number | null = null;
   private singleResult: boolean = false;
 
   constructor(table: string) {
@@ -59,6 +78,20 @@ class QueryBuilder {
     return this;
   }
 
+  // Add pagination support
+  range(from: number, to: number) {
+    this.offsetCount = from;
+    this.limitCount = to - from + 1;
+    return this;
+  }
+
+  // Add page-based pagination
+  page(pageNum: number, pageSize: number = 50) {
+    this.pageNumber = pageNum;
+    this.limitCount = pageSize;
+    return this;
+  }
+
   single() {
     this.singleResult = true;
     return this;
@@ -78,7 +111,15 @@ class QueryBuilder {
     });
     
     if (this.orderBy) params.append('order', this.orderBy);
-    if (this.limitCount) params.append('limit', this.limitCount.toString());
+    
+    // Handle pagination
+    if (this.pageNumber) {
+      params.append('page', this.pageNumber.toString());
+      if (this.limitCount) params.append('limit', this.limitCount.toString());
+    } else {
+      if (this.limitCount) params.append('limit', this.limitCount.toString());
+      if (this.offsetCount) params.append('offset', this.offsetCount.toString());
+    }
     
     const queryString = params.toString();
     const url = `/api/${this.table}${queryString ? `?${queryString}` : ''}`;
@@ -156,7 +197,7 @@ export const supabase = {
   auth: {
     signUp: async ({ email, password, options }: { email: string; password: string; options?: { data?: any } }) => {
       try {
-        return await apiCall('/api/auth/signup', {
+        const result = await apiCall('/api/auth/signup', {
           method: 'POST',
           body: JSON.stringify({ 
             email, 
@@ -164,47 +205,71 @@ export const supabase = {
             full_name: options?.data?.full_name
           }),
         });
+        
+        // Store token if signup successful
+        if (result.token && !result.error) {
+          localStorage.setItem('auth_token', result.token);
+        }
+        
+        return result;
       } catch (error: any) {
-        return { data: null, error: { message: error.message } };
+        return { user: null, error: { message: error.message } };
       }
     },
 
     signInWithPassword: async ({ email, password }: { email: string; password: string }) => {
       try {
-        return await apiCall('/api/auth/signin', {
+        const result = await apiCall('/api/auth/signin', {
           method: 'POST',
           body: JSON.stringify({ email, password }),
         });
+        
+        // Store token if signin successful
+        if (result.token && !result.error) {
+          localStorage.setItem('auth_token', result.token);
+        }
+        
+        return result;
       } catch (error: any) {
-        return { data: null, error: { message: error.message } };
+        return { user: null, error: { message: error.message } };
       }
     },
 
     signOut: async () => {
       try {
-        return await apiCall('/api/auth/signout', {
+        const result = await apiCall('/api/auth/signout', {
           method: 'POST',
         });
+        
+        // Clear token on signout
+        localStorage.removeItem('auth_token');
+        
+        return result;
       } catch (error: any) {
+        // Still clear token even if API call fails
+        localStorage.removeItem('auth_token');
         return { error: { message: error.message } };
       }
     },
 
     getUser: async () => {
       try {
-        // Check localStorage first (since we're using localStorage for auth)
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          try {
-            const userData = JSON.parse(storedUser);
-            return { data: { user: userData }, error: null };
-          } catch (e) {
-            console.error('Error parsing stored user:', e);
-          }
+        const token = localStorage.getItem('auth_token');
+        
+        if (!token) {
+          return { data: { user: null }, error: null };
         }
         
-        // Fallback to API call
-        return await apiCall('/api/auth/user');
+        // Fetch user from API with token
+        const result = await apiCall('/api/auth/user');
+        
+        if (result.user) {
+          return { data: { user: result.user }, error: null };
+        } else if (result.error) {
+          return { data: { user: null }, error: result.error };
+        }
+        
+        return { data: { user: null }, error: null };
       } catch (error: any) {
         return { data: { user: null }, error: { message: error.message } };
       }

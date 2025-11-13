@@ -57,15 +57,15 @@ export function AppSidebar() {
   ];
 
   return (
-    <Sidebar className="border-r border-border">
+    <Sidebar className="border-r border-border" aria-label="Main navigation">
       <SidebarContent>
         <SidebarGroup className="pt-8">
           <div className="px-6 mb-8">
-            <h1 className="text-xl font-bold tracking-tight">TimeGrid</h1>
+            <h1 className="text-xl font-bold tracking-tight" role="heading" aria-level={1}>TimeGrid</h1>
           </div>
           
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu role="navigation" aria-label="Primary navigation">
               {navigation.filter(item => item.enabled).map((item) => (
                 <SidebarMenuItem key={item.name}>
                   <SidebarMenuButton asChild>
@@ -74,8 +74,9 @@ export function AppSidebar() {
                       end={item.href === "/"}
                       className="flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-surface"
                       activeClassName="bg-surface text-foreground font-semibold"
+                      aria-label={`Navigate to ${item.name}`}
                     >
-                      <item.icon className="h-5 w-5" />
+                      <item.icon className="h-5 w-5" aria-hidden="true" />
                       <span>{item.name}</span>
                     </NavLink>
                   </SidebarMenuButton>
@@ -91,7 +92,7 @@ export function AppSidebar() {
               Business
             </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu role="navigation" aria-label="Business features">
                 {businessNav.filter(item => item.enabled).map((item) => (
                   <SidebarMenuItem key={item.name}>
                     <SidebarMenuButton asChild>
@@ -99,8 +100,9 @@ export function AppSidebar() {
                         to={item.href}
                         className="flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-surface"
                         activeClassName="bg-surface text-foreground font-semibold"
+                        aria-label={`Navigate to ${item.name}`}
                       >
-                        <item.icon className="h-5 w-5" />
+                        <item.icon className="h-5 w-5" aria-hidden="true" />
                         <span>{item.name}</span>
                       </NavLink>
                     </SidebarMenuButton>
@@ -117,7 +119,7 @@ export function AppSidebar() {
               Team
             </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu role="navigation" aria-label="Team features">
                 {teamNav.filter(item => item.enabled).map((item) => (
                   <SidebarMenuItem key={item.name}>
                     <SidebarMenuButton asChild>
@@ -125,8 +127,9 @@ export function AppSidebar() {
                         to={item.href}
                         className="flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-surface"
                         activeClassName="bg-surface text-foreground font-semibold"
+                        aria-label={`Navigate to ${item.name}`}
                       >
-                        <item.icon className="h-5 w-5" />
+                        <item.icon className="h-5 w-5" aria-hidden="true" />
                         <span>{item.name}</span>
                       </NavLink>
                     </SidebarMenuButton>
@@ -142,7 +145,7 @@ export function AppSidebar() {
             More
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu role="navigation" aria-label="Additional features and settings">
               {settingsNav.filter(item => item.enabled).map((item) => (
                 <SidebarMenuItem key={item.name}>
                   <SidebarMenuButton asChild>
@@ -150,8 +153,9 @@ export function AppSidebar() {
                       to={item.href}
                       className="flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-surface"
                       activeClassName="bg-surface text-foreground font-semibold"
+                      aria-label={`Navigate to ${item.name}`}
                     >
-                      <item.icon className="h-5 w-5" />
+                      <item.icon className="h-5 w-5" aria-hidden="true" />
                       <span>{item.name}</span>
                     </NavLink>
                   </SidebarMenuButton>

@@ -12,6 +12,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -41,6 +51,7 @@ export default function EntriesPage() {
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [bulkEditProject, setBulkEditProject] = useState<string>("");
   const [bulkEditDescription, setBulkEditDescription] = useState<string>("");
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   
   // Single entry edit state
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
@@ -239,18 +250,56 @@ export default function EntriesPage() {
             </p>
           </div>
           {filteredEntries.length > 0 && !isLoading && (
-            <div className="flex gap-2">
+            <div className="flex gap-2" role="group" aria-label="Time entries actions">
+              <div className="flex items-center gap-2 mr-2">
+                <Checkbox
+                  checked={selectedEntries.size > 0 && selectedEntries.size === filteredEntries.length}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      // Select all filtered entries
+                      setSelectedEntries(new Set(filteredEntries.map(e => e.id)));
+                    } else {
+                      // Deselect all
+                      setSelectedEntries(new Set());
+                    }
+                  }}
+                  aria-label="Select all time entries"
+                />
+                <span className="text-sm text-muted-foreground">
+                  {selectedEntries.size > 0 ? `${selectedEntries.size} selected` : 'Select all'}
+                </span>
+              </div>
               {selectedEntries.size > 0 && (
-                <Button 
-                  onClick={() => setIsBulkEditOpen(true)}
-                  variant="secondary"
-                >
-                  <Edit3 className="h-4 w-4 mr-2" />
-                  Edit {selectedEntries.size} Selected
-                </Button>
+                <>
+                  <Button 
+                    onClick={() => setIsBulkEditOpen(true)}
+                    variant="secondary"
+                    aria-label={`Edit ${selectedEntries.size} selected time entries`}
+                  >
+                    <Edit3 className="h-4 w-4 mr-2" aria-hidden="true" />
+                    Edit {selectedEntries.size} Selected
+                  </Button>
+                  <Button 
+                    onClick={() => setIsBulkDeleteOpen(true)}
+                    variant="destructive"
+                    disabled={isDeleting}
+                    aria-label={`Delete ${selectedEntries.size} selected time entries`}
+                  >
+                    {isDeleting ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
+                    )}
+                    Delete {selectedEntries.size} Selected
+                  </Button>
+                </>
               )}
-              <Button onClick={exportToCSV} variant="outline">
-                <Download className="h-4 w-4 mr-2" />
+              <Button 
+                onClick={exportToCSV} 
+                variant="outline"
+                aria-label="Export time entries to CSV file"
+              >
+                <Download className="h-4 w-4 mr-2" aria-hidden="true" />
                 Export CSV
               </Button>
             </div>
@@ -374,8 +423,9 @@ export default function EntriesPage() {
                           onClick={() => openEditDialog(entry)}
                           className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                           title="Edit entry"
+                          aria-label={`Edit time entry for ${project?.name || 'Unknown project'}`}
                         >
-                          <Edit3 className="h-4 w-4" />
+                          <Edit3 className="h-4 w-4" aria-hidden="true" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -383,8 +433,9 @@ export default function EntriesPage() {
                           onClick={() => deleteEntry(entry.id)}
                           className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                           title="Delete entry"
+                          aria-label={`Delete time entry for ${project?.name || 'Unknown project'}`}
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
                         </Button>
                       </div>
                     );
@@ -399,10 +450,10 @@ export default function EntriesPage() {
 
       {/* Edit Entry Dialog */}
       <Dialog open={!!editingEntry} onOpenChange={(open) => !open && setEditingEntry(null)}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px]" aria-labelledby="edit-entry-title" aria-describedby="edit-entry-description">
           <DialogHeader>
-            <DialogTitle>Edit Time Entry</DialogTitle>
-            <DialogDescription>
+            <DialogTitle id="edit-entry-title">Edit Time Entry</DialogTitle>
+            <DialogDescription id="edit-entry-description">
               Update the details of this time entry
             </DialogDescription>
           </DialogHeader>
@@ -568,7 +619,7 @@ export default function EntriesPage() {
                   <SelectValue placeholder="Keep existing project" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Keep existing project</SelectItem>
+                  <SelectItem value="__keep_existing__">Keep existing project</SelectItem>
                   {projects.map(project => (
                     <SelectItem key={project.id} value={project.id}>
                       <div className="flex items-center gap-2">
@@ -606,6 +657,8 @@ export default function EntriesPage() {
               <Button 
                 onClick={() => {
                   // In real app, would call updateEntry mutation
+                  // Only update project if it's not the "keep existing" option
+                  const shouldUpdateProject = bulkEditProject && bulkEditProject !== "__keep_existing__";
                   toast.success(`Updated ${selectedEntries.size} entries`);
                   setSelectedEntries(new Set());
                   setIsBulkEditOpen(false);
@@ -630,6 +683,40 @@ export default function EntriesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={isBulkDeleteOpen} onOpenChange={setIsBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedEntries.size} {selectedEntries.size === 1 ? 'Entry' : 'Entries'}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {selectedEntries.size} time {selectedEntries.size === 1 ? 'entry' : 'entries'}. 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                const count = selectedEntries.size;
+                const entryIds = Array.from(selectedEntries);
+                
+                // Delete all selected entries
+                for (const entryId of entryIds) {
+                  deleteEntry(entryId);
+                }
+                
+                setSelectedEntries(new Set());
+                setIsBulkDeleteOpen(false);
+                toast.success(`Deleted ${count} ${count === 1 ? 'entry' : 'entries'}`);
+              }}
+            >
+              Delete {selectedEntries.size} {selectedEntries.size === 1 ? 'Entry' : 'Entries'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

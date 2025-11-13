@@ -24,10 +24,12 @@
         "fullscreen": false,
         "center": true,
         "visible": true,
-        "hiddenTitle": true,
-        "titleBarStyle": "Overlay",
+        "decorations": true,
+        "transparent": false,
+        "titleBarStyle": "Transparent",
         "theme": "Dark",
-        "acceptFirstMouse": true
+        "acceptFirstMouse": true,
+        "hiddenTitle": true
       },
       {
         "label": "timer-widget",

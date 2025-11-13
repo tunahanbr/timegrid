@@ -2,6 +2,7 @@
 // Stores unsynced data locally with no size limits
 
 import { Project, TimeEntry, Client } from './supabase-storage';
+import { logger } from './logger';
 
 // Check if we're running in Tauri
 const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
@@ -37,21 +38,25 @@ class OfflineStorage {
   private readonly CACHED_PROJECTS_FILE = 'cached_projects.json';
   private readonly CACHED_ENTRIES_FILE = 'cached_entries.json';
   private readonly CACHED_CLIENTS_FILE = 'cached_clients.json';
+  
+  // Sync queue file
+  private readonly QUEUE_FILE = 'sync_queue.json';
 
   // Tauri filesystem methods
   private async readFile(filename: string): Promise<any[]> {
     if (!isTauri) {
-      // Fallback to localStorage in browser
+      // Browser: use localStorage ONLY
       const key = `offline_${filename.replace('.json', '')}`;
       try {
         const stored = localStorage.getItem(key);
         return stored ? JSON.parse(stored) : [];
       } catch (error) {
-        console.error(`Failed to read from localStorage:`, error);
+        logger.error(`Failed to read from localStorage`, error, { context: 'OfflineStorage', data: { key } });
         return [];
       }
     }
 
+    // Tauri: use filesystem ONLY (no fallback)
     try {
       const { readTextFile } = await import('@tauri-apps/plugin-fs');
       const { appDataDir, join } = await import('@tauri-apps/api/path');
@@ -66,23 +71,25 @@ class OfflineStorage {
       if (error.includes?.('No such file') || error.message?.includes('No such file')) {
         return [];
       }
-      console.error(`Failed to read ${filename}:`, error);
+      logger.error(`Failed to read ${filename} from filesystem`, error, { context: 'OfflineStorage' });
       return [];
     }
   }
 
   private async writeFile(filename: string, data: any[]): Promise<void> {
     if (!isTauri) {
-      // Fallback to localStorage in browser
+      // Browser: use localStorage ONLY
       const key = `offline_${filename.replace('.json', '')}`;
       try {
         localStorage.setItem(key, JSON.stringify(data));
       } catch (error) {
-        console.error(`Failed to write to localStorage:`, error);
+        logger.error(`Failed to write to localStorage`, error, { context: 'OfflineStorage', data: { key } });
+        throw error; // Propagate error so caller knows it failed
       }
       return;
     }
 
+    // Tauri: use filesystem ONLY (no fallback)
     try {
       const { writeTextFile, exists, mkdir } = await import('@tauri-apps/plugin-fs');
       const { appDataDir, join } = await import('@tauri-apps/api/path');
@@ -98,17 +105,10 @@ class OfflineStorage {
       }
       
       await writeTextFile(filePath, JSON.stringify(data, null, 2));
-      console.log(`[OfflineStorage] Wrote ${data.length} items to ${filePath}`);
+      logger.storageOperation('write', { filename, count: data.length });
     } catch (error) {
-      console.error(`Failed to write ${filename}:`, error);
-      // Fallback to localStorage
-      const key = `offline_${filename.replace('.json', '')}`;
-      try {
-        localStorage.setItem(key, JSON.stringify(data));
-        console.log(`[OfflineStorage] Fell back to localStorage for ${filename}`);
-      } catch (e) {
-        console.error(`Failed localStorage fallback:`, e);
-      }
+      logger.error(`Failed to write ${filename} to filesystem`, error, { context: 'OfflineStorage' });
+      throw error; // Propagate error so caller knows it failed
     }
   }
 
@@ -130,7 +130,7 @@ class OfflineStorage {
     projects.push(offlineProject);
     await this.writeFile(this.PROJECTS_FILE, projects);
     
-    console.log('[OfflineStorage] Added offline project:', offlineProject);
+    logger.offlineOperation('add project', { projectName: offlineProject.name });
     return offlineProject;
   }
 
@@ -138,7 +138,7 @@ class OfflineStorage {
     const projects = await this.getOfflineProjects();
     const filtered = projects.filter(p => p.queueId !== queueId);
     await this.writeFile(this.PROJECTS_FILE, filtered);
-    console.log('[OfflineStorage] Removed offline project with queueId:', queueId);
+    logger.storageOperation('remove project', { queueId });
   }
 
   async clearOfflineProjects(): Promise<void> {
@@ -163,7 +163,7 @@ class OfflineStorage {
     entries.push(offlineEntry);
     await this.writeFile(this.ENTRIES_FILE, entries);
     
-    console.log('[OfflineStorage] Added offline entry:', offlineEntry);
+    logger.offlineOperation('add entry', { projectId: offlineEntry.projectId });
     return offlineEntry;
   }
 
@@ -171,7 +171,7 @@ class OfflineStorage {
     const entries = await this.getOfflineEntries();
     const filtered = entries.filter(e => e.queueId !== queueId);
     await this.writeFile(this.ENTRIES_FILE, filtered);
-    console.log('[OfflineStorage] Removed offline entry with queueId:', queueId);
+    logger.storageOperation('remove entry', { queueId });
   }
 
   async clearOfflineEntries(): Promise<void> {
@@ -196,7 +196,7 @@ class OfflineStorage {
     clients.push(offlineClient);
     await this.writeFile(this.CLIENTS_FILE, clients);
     
-    console.log('[OfflineStorage] Added offline client:', offlineClient);
+    logger.offlineOperation('add client', { clientName: offlineClient.name });
     return offlineClient;
   }
 
@@ -204,7 +204,7 @@ class OfflineStorage {
     const clients = await this.getOfflineClients();
     const filtered = clients.filter(c => c.queueId !== queueId);
     await this.writeFile(this.CLIENTS_FILE, filtered);
-    console.log('[OfflineStorage] Removed offline client with queueId:', queueId);
+    logger.storageOperation('remove client', { queueId });
   }
 
   async clearOfflineClients(): Promise<void> {
@@ -216,7 +216,7 @@ class OfflineStorage {
     await this.clearOfflineProjects();
     await this.clearOfflineEntries();
     await this.clearOfflineClients();
-    console.log('[OfflineStorage] Cleared all offline data');
+    logger.storageOperation('clear all');
   }
 
   // ========== CACHED ONLINE DATA (for persistence across app restarts) ==========
@@ -228,7 +228,7 @@ class OfflineStorage {
 
   async setCachedProjects(projects: Project[]): Promise<void> {
     await this.writeFile(this.CACHED_PROJECTS_FILE, projects);
-    console.log('[OfflineStorage] Cached', projects.length, 'projects');
+    logger.storageOperation('cache projects', { count: projects.length });
   }
 
   // Cache Time Entries
@@ -238,7 +238,7 @@ class OfflineStorage {
 
   async setCachedEntries(entries: TimeEntry[]): Promise<void> {
     await this.writeFile(this.CACHED_ENTRIES_FILE, entries);
-    console.log('[OfflineStorage] Cached', entries.length, 'entries');
+    logger.storageOperation('cache entries', { count: entries.length });
   }
 
   // Cache Clients
@@ -248,7 +248,7 @@ class OfflineStorage {
 
   async setCachedClients(clients: Client[]): Promise<void> {
     await this.writeFile(this.CACHED_CLIENTS_FILE, clients);
-    console.log('[OfflineStorage] Cached', clients.length, 'clients');
+    logger.storageOperation('cache clients', { count: clients.length });
   }
 
   // Clear cached data
@@ -256,7 +256,75 @@ class OfflineStorage {
     await this.writeFile(this.CACHED_PROJECTS_FILE, []);
     await this.writeFile(this.CACHED_ENTRIES_FILE, []);
     await this.writeFile(this.CACHED_CLIENTS_FILE, []);
-    console.log('[OfflineStorage] Cleared all cached data');
+    logger.storageOperation('clear cache');
+  }
+  
+  // ========== SYNC QUEUE (for offline operations) ==========
+  
+  async getSyncQueue(): Promise<any[]> {
+    return this.readFile(this.QUEUE_FILE);
+  }
+  
+  async setSyncQueue(queue: any[]): Promise<void> {
+    await this.writeFile(this.QUEUE_FILE, queue);
+  }
+  
+  async clearSyncQueue(): Promise<void> {
+    await this.writeFile(this.QUEUE_FILE, []);
+    logger.storageOperation('clear sync queue');
+  }
+  
+  // ========== MIGRATION HELPER ==========
+  
+  /**
+   * Migrates data from localStorage to filesystem (one-time migration for existing users)
+   * Safe to call multiple times - will skip if no localStorage data exists
+   */
+  async migrateFromLocalStorage(): Promise<void> {
+    if (!isTauri) {
+      // Skip migration in browser mode
+      return;
+    }
+    
+    logger.info('Checking for localStorage data to migrate', { context: 'Migration' });
+    
+    const filesToMigrate = [
+      { localStorageKey: 'offline_projects', file: this.PROJECTS_FILE },
+      { localStorageKey: 'offline_entries', file: this.ENTRIES_FILE },
+      { localStorageKey: 'offline_clients', file: this.CLIENTS_FILE },
+      { localStorageKey: 'offline_cached_projects', file: this.CACHED_PROJECTS_FILE },
+      { localStorageKey: 'offline_cached_entries', file: this.CACHED_ENTRIES_FILE },
+      { localStorageKey: 'offline_cached_clients', file: this.CACHED_CLIENTS_FILE },
+      { localStorageKey: 'offline_queue', file: this.QUEUE_FILE },
+    ];
+    
+    let migratedCount = 0;
+    
+    for (const { localStorageKey, file } of filesToMigrate) {
+      try {
+        const data = localStorage.getItem(localStorageKey);
+        if (data) {
+          const parsed = JSON.parse(data);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            await this.writeFile(file, parsed);
+            localStorage.removeItem(localStorageKey); // Clean up after migration
+            migratedCount++;
+            logger.info(`Migrated ${parsed.length} items`, { 
+              context: 'Migration', 
+              data: { from: localStorageKey, to: file } 
+            });
+          }
+        }
+      } catch (error) {
+        logger.error(`Failed to migrate ${localStorageKey}`, error, { context: 'Migration' });
+      }
+    }
+    
+    if (migratedCount > 0) {
+      logger.info(`Migration complete! Migrated ${migratedCount} files`, { context: 'Migration' });
+    } else {
+      logger.debug('No localStorage data to migrate', { context: 'Migration' });
+    }
   }
 }
 

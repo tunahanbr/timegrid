@@ -1,17 +1,22 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { supabase } from "@/integrations/db/client";
+import { logger } from "@/lib/logger";
 
-// Custom User type (no longer using Supabase types)
+// JWT API base URL
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+// User type
 interface User {
   id: string;
   email: string;
   full_name?: string;
   avatar_url?: string;
   created_at?: string;
+  updated_at?: string;
 }
 
 interface Session {
   user: User;
+  token: string;
 }
 
 interface AuthContextType {
@@ -21,6 +26,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  getAuthHeaders: () => Record<string, string>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,70 +36,140 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Helper to get auth headers
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('auth_token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  };
+
+  // Check if user is authenticated on mount
   useEffect(() => {
-    // Check for stored user session
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        setUser(userData);
-        setSession({ user: userData });
-      } catch (e) {
-        console.error('Error parsing stored user:', e);
-        localStorage.removeItem('user');
+    const checkAuth = async () => {
+      const token = localStorage.getItem('auth_token');
+      
+      if (!token) {
+        setLoading(false);
+        return;
       }
-    }
-    setLoading(false);
+
+      try {
+        // Verify token by fetching current user
+        const response = await fetch(`${API_URL}/api/auth/user`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user) {
+            setUser(data.user);
+            setSession({ user: data.user, token });
+            logger.info('Auth restored from token');
+          }
+        } else {
+          // Token invalid/expired - clear it
+          logger.warn('Token invalid, clearing auth');
+          localStorage.removeItem('auth_token');
+        }
+      } catch (error) {
+        logger.error('Auth check failed', error);
+        localStorage.removeItem('auth_token');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string) => {
     try {
-      const { user: newUser, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
+      const response = await fetch(`${API_URL}/api/auth/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: fullName,
+        }),
       });
 
-      if (!error && newUser) {
-        setUser(newUser);
-        setSession({ user: newUser });
-        localStorage.setItem('user', JSON.stringify(newUser));
+      const data = await response.json();
+
+      if (data.error) {
+        return { error: { message: data.error } };
       }
 
-      return { error };
+      if (data.user && data.token) {
+        setUser(data.user);
+        setSession({ user: data.user, token: data.token });
+        localStorage.setItem('auth_token', data.token);
+        logger.info('Signup successful', { data: { email: data.user.email } });
+      }
+
+      return { error: null };
     } catch (error: any) {
-      return { error: { message: error.message } };
+      logger.error('Signup error', error);
+      return { error: { message: error.message || 'Signup failed' } };
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { user: userData, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await fetch(`${API_URL}/api/auth/signin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
       });
 
-      if (!error && userData) {
-        setUser(userData);
-        setSession({ user: userData });
-        localStorage.setItem('user', JSON.stringify(userData));
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { error: { message: data.error || data.message || `HTTP ${response.status}: ${response.statusText}` } };
       }
 
-      return { error };
+      if (data.error) {
+        return { error: { message: data.error } };
+      }
+
+      if (data.user && data.token) {
+        setUser(data.user);
+        setSession({ user: data.user, token: data.token });
+        localStorage.setItem('auth_token', data.token);
+        logger.info('Signin successful', { data: { email: data.user.email } });
+      }
+
+      return { error: null };
     } catch (error: any) {
-      return { error: { message: error.message } };
+      logger.error('Signin error', error);
+      return { error: { message: error.message || 'Network error: Could not connect to server' } };
     }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-    localStorage.removeItem('user');
+    try {
+      // Call signout endpoint (optional with JWT)
+      await fetch(`${API_URL}/api/auth/signout`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+    } catch (error) {
+      logger.error('Signout error', error);
+    } finally {
+      // Clear local state
+      setUser(null);
+      setSession(null);
+      localStorage.removeItem('auth_token');
+      logger.info('Signed out');
+    }
   };
 
   return (
@@ -105,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUp,
         signIn,
         signOut,
+        getAuthHeaders,
       }}
     >
       {children}

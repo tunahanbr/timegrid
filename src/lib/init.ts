@@ -1,8 +1,16 @@
 import { storage } from "./storage";
 import { setProjectsGetter } from "./tray-updater";
 import { supabaseStorage } from "./supabase-storage";
+import { offlineStorage } from "./offline-storage";
 
-export const initializeApp = () => {
+export const initializeApp = async () => {
+  // Migrate any existing localStorage data to filesystem (Tauri only)
+  try {
+    await offlineStorage.migrateFromLocalStorage();
+  } catch (error) {
+    console.error('[Init] Failed to migrate localStorage data:', error);
+  }
+  
   // No default projects - users start with clean slate
   // Projects will be created by users or loaded from Supabase
   

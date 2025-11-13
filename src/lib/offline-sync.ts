@@ -2,6 +2,7 @@
 // Queues operations when offline and syncs when back online
 
 import { offlineStorage } from './offline-storage';
+import { logger } from './logger';
 
 interface QueuedOperation {
   id: string;
@@ -12,7 +13,6 @@ interface QueuedOperation {
   retries: number;
 }
 
-const QUEUE_KEY = 'offline_queue';
 const MAX_RETRIES = 3;
 
 export class OfflineSync {
@@ -25,35 +25,33 @@ export class OfflineSync {
     this.setupNetworkListeners();
   }
 
-  private loadQueue() {
+  private async loadQueue() {
     try {
-      const stored = localStorage.getItem(QUEUE_KEY);
-      if (stored) {
-        this.queue = JSON.parse(stored);
-      }
+      this.queue = await offlineStorage.getSyncQueue();
+      logger.info(`Loaded queue with ${this.queue.length} items`, { context: 'OfflineSync' });
     } catch (error) {
-      console.error('Failed to load offline queue:', error);
+      logger.error('Failed to load queue', error, { context: 'OfflineSync' });
       this.queue = [];
     }
   }
 
-  private saveQueue() {
+  private async saveQueue() {
     try {
-      localStorage.setItem(QUEUE_KEY, JSON.stringify(this.queue));
+      await offlineStorage.setSyncQueue(this.queue);
     } catch (error) {
-      console.error('Failed to save offline queue:', error);
+      logger.error('Failed to save queue', error, { context: 'OfflineSync' });
     }
   }
 
   private setupNetworkListeners() {
     window.addEventListener('online', () => {
-      console.log('[OfflineSync] Network online, starting sync...');
+      logger.info('Network online, starting sync', { context: 'OfflineSync' });
       this.notifyListeners({ status: 'online', syncing: false });
       this.syncQueue();
     });
 
     window.addEventListener('offline', () => {
-      console.log('[OfflineSync] Network offline');
+      logger.info('Network offline', { context: 'OfflineSync' });
       this.notifyListeners({ status: 'offline', syncing: false });
     });
   }
@@ -67,9 +65,13 @@ export class OfflineSync {
     };
 
     this.queue.push(queuedOp);
-    this.saveQueue();
     
-    console.log('[OfflineSync] Queued operation:', queuedOp.type, queuedOp.entity);
+    // Save queue asynchronously (don't block)
+    this.saveQueue().catch(error => {
+      logger.error('Failed to save queue after queueOperation', error, { context: 'OfflineSync' });
+    });
+    
+    logger.offlineOperation('queued', { type: queuedOp.type, entity: queuedOp.entity });
     this.notifyListeners({ 
       status: navigator.onLine ? 'online' : 'offline', 
       syncing: false,
@@ -90,14 +92,14 @@ export class OfflineSync {
     }
 
     if (!navigator.onLine) {
-      console.log('[OfflineSync] Cannot sync - offline');
+      logger.debug('Cannot sync - offline', { context: 'OfflineSync' });
       return;
     }
 
     this.isSyncing = true;
     this.notifyListeners({ status: 'online', syncing: true, queueSize: this.queue.length });
 
-    console.log('[OfflineSync] Starting sync, queue size:', this.queue.length);
+    logger.syncStart(this.queue.length);
 
     const successfulOps: string[] = [];
     const failedOps: QueuedOperation[] = [];
@@ -110,15 +112,15 @@ export class OfflineSync {
         // Remove from offline storage after successful sync
         this.cleanupOfflineData(operation);
         
-        console.log('[OfflineSync] Synced operation:', operation.type, operation.entity);
+        logger.debug(`Synced operation: ${operation.type} ${operation.entity}`, { context: 'OfflineSync' });
       } catch (error) {
-        console.error('[OfflineSync] Failed to sync operation:', operation, error);
+        logger.error(`Failed to sync operation: ${operation.type} ${operation.entity}`, error, { context: 'OfflineSync' });
         
         operation.retries++;
         if (operation.retries < MAX_RETRIES) {
           failedOps.push(operation);
         } else {
-          console.error('[OfflineSync] Max retries reached, dropping operation:', operation);
+          logger.warn(`Max retries reached, dropping operation: ${operation.type} ${operation.entity}`, { context: 'OfflineSync' });
           // Also clean up offline data for dropped operations
           this.cleanupOfflineData(operation);
         }
@@ -127,7 +129,9 @@ export class OfflineSync {
 
     // Update queue with only failed operations that haven't exceeded retries
     this.queue = failedOps;
-    this.saveQueue();
+    
+    // Save queue asynchronously
+    await this.saveQueue();
 
     this.isSyncing = false;
     
@@ -148,7 +152,7 @@ export class OfflineSync {
       this.showSyncSuccessToast(successfulOps.length, failedOps.length);
     }
 
-    console.log('[OfflineSync] Sync complete. Successful:', successfulOps.length, 'Failed:', failedOps.length, 'Queue size:', this.queue.length);
+    logger.syncComplete(successfulOps.length, failedOps.length);
   }
 
   private async triggerDataRefresh() {
@@ -156,9 +160,9 @@ export class OfflineSync {
     try {
       // We'll dispatch a custom event that the App can listen to
       window.dispatchEvent(new CustomEvent('offline-sync-complete'));
-      console.log('[OfflineSync] Dispatched sync complete event');
+      logger.debug('Dispatched sync complete event', { context: 'OfflineSync' });
     } catch (error) {
-      console.error('[OfflineSync] Failed to dispatch sync event:', error);
+      logger.error('Failed to dispatch sync event', error, { context: 'OfflineSync' });
     }
   }
 
@@ -176,7 +180,7 @@ export class OfflineSync {
         });
       }
     } catch (error) {
-      console.error('[OfflineSync] Failed to show toast:', error);
+      logger.error('Failed to show toast', error, { context: 'OfflineSync' });
     }
   }
 
@@ -197,37 +201,32 @@ export class OfflineSync {
         case 'client':
           if (operation.type === 'add') {
             offlineStorage.removeOfflineClient(operation.id);
-          }
-          break;
-      }
-    } catch (error) {
-      console.error('[OfflineSync] Failed to cleanup offline data:', error);
+        }
+        break;
     }
-  }
-
-  private async executeOperation(operation: QueuedOperation): Promise<void> {
+    } catch (error) {
+      logger.error('Failed to cleanup offline data', error, { context: 'OfflineSync' });
+    }
+  }  private async executeOperation(operation: QueuedOperation): Promise<void> {
     // Import the storage functions dynamically to avoid circular dependencies
     const { supabaseStorage } = await import('./supabase-storage');
 
-    console.log('[OfflineSync] ========== EXECUTING OPERATION ==========');
-    console.log('[OfflineSync] Type:', operation.type);
-    console.log('[OfflineSync] Entity:', operation.entity);
-    console.log('[OfflineSync] Data:', JSON.stringify(operation.data, null, 2));
+    logger.debug('Executing operation', { 
+      context: 'OfflineSync', 
+      data: { type: operation.type, entity: operation.entity } 
+    });
 
     switch (operation.entity) {
       case 'project':
         if (operation.type === 'add' || operation.type === 'create') {
-          console.log('[OfflineSync] Calling addProject with:', operation.data.name);
           const result = await supabaseStorage.addProject(operation.data, operation.data.userId);
-          console.log('[OfflineSync] Project added successfully:', result);
+          logger.debug('Project added successfully', { context: 'OfflineSync', data: { id: result?.id } });
         } else if (operation.type === 'update') {
-          console.log('[OfflineSync] Calling updateProject:', operation.data.id);
           await supabaseStorage.updateProject(operation.data.id, operation.data.updates);
-          console.log('[OfflineSync] Project updated successfully');
+          logger.debug('Project updated successfully', { context: 'OfflineSync' });
         } else if (operation.type === 'delete') {
-          console.log('[OfflineSync] Calling deleteProject:', operation.data.id);
           await supabaseStorage.deleteProject(operation.data.id);
-          console.log('[OfflineSync] Project deleted successfully');
+          logger.debug('Project deleted successfully', { context: 'OfflineSync' });
         }
         break;
 
@@ -236,17 +235,14 @@ export class OfflineSync {
           // Get userId from operation data
           const userId = operation.data.userId;
           if (!userId) throw new Error('userId is required for addEntry');
-          console.log('[OfflineSync] Calling addEntry for project:', operation.data.projectId);
           const result = await supabaseStorage.addEntry(operation.data, userId);
-          console.log('[OfflineSync] Entry added successfully:', result);
+          logger.debug('Entry added successfully', { context: 'OfflineSync', data: { id: result?.id } });
         } else if (operation.type === 'update') {
-          console.log('[OfflineSync] Calling updateEntry:', operation.data.id);
           await supabaseStorage.updateEntry(operation.data.id, operation.data.updates);
-          console.log('[OfflineSync] Entry updated successfully');
+          logger.debug('Entry updated successfully', { context: 'OfflineSync' });
         } else if (operation.type === 'delete') {
-          console.log('[OfflineSync] Calling deleteEntry:', operation.data.id);
           await supabaseStorage.deleteEntry(operation.data.id);
-          console.log('[OfflineSync] Entry deleted successfully');
+          logger.debug('Entry deleted successfully', { context: 'OfflineSync' });
         }
         break;
 
@@ -255,25 +251,20 @@ export class OfflineSync {
           // Get userId from operation data
           const userId = operation.data.userId;
           if (!userId) throw new Error('userId is required for addClient');
-          console.log('[OfflineSync] Calling addClient:', operation.data.name);
           const result = await supabaseStorage.addClient(operation.data, userId);
-          console.log('[OfflineSync] Client added successfully:', result);
+          logger.debug('Client added successfully', { context: 'OfflineSync', data: { id: result?.id } });
         } else if (operation.type === 'update') {
-          console.log('[OfflineSync] Calling updateClient:', operation.data.id);
           await supabaseStorage.updateClient(operation.data.id, operation.data.updates);
-          console.log('[OfflineSync] Client updated successfully');
+          logger.debug('Client updated successfully', { context: 'OfflineSync' });
         } else if (operation.type === 'delete') {
-          console.log('[OfflineSync] Calling deleteClient:', operation.data.id);
           await supabaseStorage.deleteClient(operation.data.id);
-          console.log('[OfflineSync] Client deleted successfully');
+          logger.debug('Client deleted successfully', { context: 'OfflineSync' });
         }
         break;
 
       default:
         throw new Error(`Unknown entity type: ${operation.entity}`);
     }
-    
-    console.log('[OfflineSync] ========== OPERATION COMPLETE ==========');
   }
 
   onStatusChange(callback: (status: SyncStatus) => void) {

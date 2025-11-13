@@ -9,34 +9,44 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { SyncIndicator } from "@/components/SyncIndicator";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import TimerPage from "./pages/TimerPage";
-import DashboardPage from "./pages/DashboardPage";
-import ReportsPage from "./pages/ReportsPage";
-import EntriesPage from "./pages/EntriesPage";
-import ProjectsPage from "./pages/ProjectsPage";
-import TagsPage from "./pages/TagsPage";
-import BudgetsPage from "./pages/BudgetsPage";
-import ExpensesPage from "./pages/ExpensesPage";
-import SettingsPage from "./pages/SettingsPage";
-import ClientsPage from "./pages/ClientsPage";
-import TeamPage from "./pages/TeamPage";
-import InvoicesPage from "./pages/InvoicesPage";
-import APIPage from "./pages/APIPage";
-import ImportPage from "./pages/ImportPage";
-import IntegrationsPage from "./pages/IntegrationsPage";
-import LoginPage from "./pages/LoginPage";
-import SignUpPage from "./pages/SignUpPage";
-import NotFound from "./pages/NotFound";
-import TimerWidgetPage from "./pages/TimerWidgetPage";
+import { Suspense, lazy } from "react";
 import { storage } from "@/lib/storage";
 import { useEffect, useState } from "react";
 import { formatDurationShort } from "@/lib/utils-time";
 import { initializeApp } from "@/lib/init";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import { LogOut, Loader2, X } from "lucide-react";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
+
+// Lazy load pages for code splitting
+const TimerPage = lazy(() => import("./pages/TimerPage"));
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const ReportsPage = lazy(() => import("./pages/ReportsPage"));
+const EntriesPage = lazy(() => import("./pages/EntriesPage"));
+const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
+const TagsPage = lazy(() => import("./pages/TagsPage"));
+const BudgetsPage = lazy(() => import("./pages/BudgetsPage"));
+const ExpensesPage = lazy(() => import("./pages/ExpensesPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const ClientsPage = lazy(() => import("./pages/ClientsPage"));
+const TeamPage = lazy(() => import("./pages/TeamPage"));
+const InvoicesPage = lazy(() => import("./pages/InvoicesPage"));
+const APIPage = lazy(() => import("./pages/APIPage"));
+const ImportPage = lazy(() => import("./pages/ImportPage"));
+const IntegrationsPage = lazy(() => import("./pages/IntegrationsPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const SignUpPage = lazy(() => import("./pages/SignUpPage"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const TimerWidgetPage = lazy(() => import("./pages/TimerWidgetPage"));
+
+// Loading fallback component
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+  </div>
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -54,8 +64,10 @@ const queryClient = new QueryClient({
   },
 });
 
-// Initialize app on load
-initializeApp();
+// Initialize app on load (async, but we don't need to wait)
+initializeApp().catch(error => {
+  console.error('[App] Failed to initialize app:', error);
+});
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const [todayTotal, setTodayTotal] = useState(0);
@@ -120,30 +132,40 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <header className="h-14 border-b border-border flex items-center justify-between px-8" data-tauri-drag-region>
+          <header 
+            className="h-14 border-b border-border flex items-center justify-between px-8" 
+            data-tauri-drag-region
+            role="banner"
+            aria-label="Application header"
+            style={{ paddingTop: '0px' }}
+          >
             <div className="flex items-center gap-6">
-              <SidebarTrigger />
-              <div className="text-sm font-medium">
+              {/* Space for native macOS traffic lights */}
+              {typeof window !== 'undefined' && (window as any).__TAURI__ && (
+                <div className="w-20 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties} />
+              )}
+              <SidebarTrigger aria-label="Toggle navigation menu" />
+              <div className="text-sm font-medium" role="status" aria-live="polite" aria-label="Today's total time">
                 Today: <span className="font-mono text-primary">{formatDurationShort(todayTotal)}</span>
               </div>
               {user && (
-                <div className="text-sm text-muted-foreground">
+                <div className="text-sm text-muted-foreground" aria-label="Current user email">
                   {user.email}
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" role="toolbar" aria-label="Header actions">
               <SyncIndicator />
               <ThemeToggle />
               {user && (
-                <Button variant="ghost" size="sm" onClick={handleSignOut}>
-                  <LogOut className="h-4 w-4 mr-2" />
+                <Button variant="ghost" size="sm" onClick={handleSignOut} aria-label="Sign out of account">
+                  <LogOut className="h-4 w-4 mr-2" aria-hidden="true" />
                   Sign Out
                 </Button>
               )}
             </div>
           </header>
-          <main className="flex-1">{children}</main>
+          <main className="flex-1" role="main" aria-label="Main content">{children}</main>
         </div>
         <KeyboardShortcutsDialog 
           open={showShortcutsDialog} 
@@ -191,13 +213,15 @@ const App = () => {
           {!isWidgetRoute && <Sonner />}
           <BrowserRouter>
             <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignUpPage />} />
+              <Route path="/login" element={<Suspense fallback={<PageLoader />}><LoginPage /></Suspense>} />
+              <Route path="/signup" element={<Suspense fallback={<PageLoader />}><SignUpPage /></Suspense>} />
               <Route 
                 path="/timer-widget" 
                 element={
                   <ProtectedRoute>
-                    <TimerWidgetPage />
+                    <Suspense fallback={<PageLoader />}>
+                      <TimerWidgetPage />
+                    </Suspense>
                   </ProtectedRoute>
                 } 
               />
@@ -206,24 +230,26 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <AppLayout>
-                    <Routes>
-                      <Route path="/" element={<TimerPage />} />
-                      <Route path="/dashboard" element={<DashboardPage />} />
-                      <Route path="/reports" element={<ReportsPage />} />
-                      <Route path="/entries" element={<EntriesPage />} />
-                      <Route path="/projects" element={<ProjectsPage />} />
-                      <Route path="/clients" element={<ClientsPage />} />
-                      <Route path="/invoices" element={<InvoicesPage />} />
-                      <Route path="/budgets" element={<BudgetsPage />} />
-                      <Route path="/expenses" element={<ExpensesPage />} />
-                      <Route path="/team" element={<TeamPage />} />
-                      <Route path="/tags" element={<TagsPage />} />
-                      <Route path="/api" element={<APIPage />} />
-                      <Route path="/import" element={<ImportPage />} />
-                      <Route path="/integrations" element={<IntegrationsPage />} />
-                      <Route path="/settings" element={<SettingsPage />} />
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
+                    <Suspense fallback={<PageLoader />}>
+                      <Routes>
+                        <Route path="/" element={<TimerPage />} />
+                        <Route path="/dashboard" element={<DashboardPage />} />
+                        <Route path="/reports" element={<ReportsPage />} />
+                        <Route path="/entries" element={<EntriesPage />} />
+                        <Route path="/projects" element={<ProjectsPage />} />
+                        <Route path="/clients" element={<ClientsPage />} />
+                        <Route path="/invoices" element={<InvoicesPage />} />
+                        <Route path="/budgets" element={<BudgetsPage />} />
+                        <Route path="/expenses" element={<ExpensesPage />} />
+                        <Route path="/team" element={<TeamPage />} />
+                        <Route path="/tags" element={<TagsPage />} />
+                        <Route path="/api" element={<APIPage />} />
+                        <Route path="/import" element={<ImportPage />} />
+                        <Route path="/integrations" element={<IntegrationsPage />} />
+                        <Route path="/settings" element={<SettingsPage />} />
+                        <Route path="*" element={<NotFound />} />
+                      </Routes>
+                    </Suspense>
                   </AppLayout>
                 </ProtectedRoute>
               }

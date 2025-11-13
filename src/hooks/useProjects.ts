@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { offlineSync } from "@/lib/offline-sync";
 import { offlineStorage } from "@/lib/offline-storage";
+import { logger } from "@/lib/logger";
 
 export function useProjects() {
   const { user } = useAuth();
@@ -12,29 +13,23 @@ export function useProjects() {
   const { data: projects = [], isLoading, error } = useQuery({
     queryKey: ["projects", user?.id],
     queryFn: async () => {
-      console.log('[useProjects] Query function called');
+      logger.queryStart('projects');
       try {
         const offlineProjects = await offlineStorage.getOfflineProjects();
-        console.log('[useProjects] Loaded offline projects:', offlineProjects);
-        
-        // Try to fetch online data
         const onlineProjects = await supabaseStorage.getProjects();
-        console.log('[useProjects] Loaded online projects:', onlineProjects);
         
         // Cache the online data for offline use
         await offlineStorage.setCachedProjects(onlineProjects);
         
-        // Merge online and offline projects
-        console.log('[useProjects] Merging projects - offline:', offlineProjects.length, 'online:', onlineProjects.length);
+        logger.querySuccess('projects', offlineProjects.length + onlineProjects.length);
         return [...offlineProjects, ...onlineProjects] as Project[];
       } catch (error) {
-        console.error('[useProjects] Query error:', error);
+        logger.queryError('projects', error);
         
         // On error, use cached online data + offline data
         const offlineProjects = await offlineStorage.getOfflineProjects();
         const cachedProjects = await offlineStorage.getCachedProjects();
         
-        console.log('[useProjects] Using cached data - offline:', offlineProjects.length, 'cached:', cachedProjects.length);
         return [...offlineProjects, ...cachedProjects] as Project[];
       }
     },
@@ -45,15 +40,10 @@ export function useProjects() {
 
   const addMutation = useMutation({
     mutationFn: async (project: Omit<Project, "id" | "createdAt">) => {
-      console.log('[useProjects] ========== ADD MUTATION CALLED ==========');
-      console.log('[useProjects] Project data:', project);
-      console.log('[useProjects] navigator.onLine:', navigator.onLine);
-      console.log('[useProjects] User ID:', user?.id);
+      logger.mutationStart('add', 'project');
       
       try {
         if (!navigator.onLine) {
-          console.log('[useProjects] Adding project offline:', project);
-          
           // Queue operation when offline
           const queueId = offlineSync.queueOperation({
             type: 'create',

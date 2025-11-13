@@ -25,8 +25,9 @@ bun run dev
 ## 🏗️ Architecture
 
 - **Frontend**: React + Vite (port 8080/8081)
-- **API**: Express.js (port 3000)
+- **API**: Express.js with JWT authentication (port 3000)
 - **Database**: PostgreSQL 15 (Docker)
+- **Security**: Helmet, CORS, Rate Limiting, Input Validation
 
 ## ✨ Features (17 Complete)
 
@@ -51,9 +52,18 @@ bun run dev
 - � **Integrations** - Connect to 5+ external services
 
 ### System
-- 🔐 **Authentication** - Secure login/signup with protected routes
+- 🔐 **Authentication** - JWT-based auth with 7-day tokens
 - ⚙️ **Settings** - Feature toggles, themes, data management
 - ⌨️ **Keyboard Shortcuts** - Global shortcuts for quick navigation
+- 🔒 **Security** - Rate limiting, input validation, CORS protection
+
+## 📚 Documentation
+
+- [Authentication Guide](docs/AUTHENTICATION.md) - JWT implementation and usage
+- [Frontend Integration](FRONTEND_JWT_INTEGRATION.md) - Frontend JWT setup (completed)
+- [JWT Implementation](JWT_IMPLEMENTATION.md) - Technical implementation details
+- [Security Overview](server/SECURITY.md) - Security features and best practices
+- [Logging Cleanup](LOGGING_CLEANUP.md) - Production logging guide
 
 ## 🛠️ Tech Stack
 
