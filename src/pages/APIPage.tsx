@@ -5,20 +5,21 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Copy, Eye, EyeOff, Key, Plus, Trash2, AlertCircle, CheckCircle, Power } from "lucide-react";
+import { Copy, Key, Plus, Trash2, AlertCircle, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAPIKeys } from "@/hooks/useAPIKeys";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export default function APIPage() {
   const { toast } = useToast();
   const [newKeyName, setNewKeyName] = useState("");
-  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [createdKey, setCreatedKey] = useState<{ apiKey: string; keyId: string; name: string | null } | null>(null);
 
   // Use the custom hook for all API key operations
-  const { apiKeys, isLoading, createAPIKey, deleteAPIKey, toggleAPIKey } = useAPIKeys();
+  const { apiKeys, isLoading, createAPIKeyAsync, deleteAPIKey, toggleAPIKey } = useAPIKeys();
 
   const handleCreateKey = async () => {
     if (!newKeyName.trim()) {
@@ -29,17 +30,21 @@ export default function APIPage() {
       });
       return;
     }
-
-    createAPIKey(newKeyName.trim());
-    setNewKeyName("");
+    try {
+      const result = await createAPIKeyAsync(newKeyName.trim());
+      setCreatedKey({ apiKey: result.apiKey, keyId: result.keyId, name: result.name });
+      setNewKeyName("");
+    } catch (e) {
+      // Error toast handled in hook
+    }
   };
 
-  const handleDeleteKey = (id: string) => {
-    deleteAPIKey(id);
+  const handleDeleteKey = (keyId: string) => {
+    deleteAPIKey(keyId);
   };
 
-  const handleToggleKey = (id: string, isActive: boolean) => {
-    toggleAPIKey({ id, is_active: !isActive });
+  const handleToggleKey = (keyId: string, isActive: boolean) => {
+    toggleAPIKey({ keyId, active: !isActive });
   };
 
   const copyToClipboard = (text: string) => {
@@ -48,10 +53,6 @@ export default function APIPage() {
       title: "Copied!",
       description: "API key copied to clipboard",
     });
-  };
-
-  const toggleShowKey = (id: string) => {
-    setShowKeys(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
   const maskKey = (key: string) => {
@@ -110,6 +111,24 @@ export default function APIPage() {
                   Generate Key
                 </Button>
               </div>
+              {createdKey && (
+                <div className="mt-4 p-3 border rounded bg-muted/50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm text-muted-foreground">New API Key</div>
+                      <code className="text-xs bg-muted px-2 py-1 rounded block mt-1">
+                        {createdKey.apiKey}
+                      </code>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Copy and store safely. It won’t be shown again.
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => copyToClipboard(createdKey.apiKey)}>
+                      <Copy className="h-4 w-4 mr-2" /> Copy
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -150,23 +169,12 @@ export default function APIPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           <code className="text-xs bg-muted px-2 py-1 rounded">
-                            {showKeys[key.id] ? key.key : maskKey(key.key)}
+                            {maskKey(`ak_${key.key_id}________________`)}
                           </code>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => toggleShowKey(key.id)}
-                          >
-                            {showKeys[key.id] ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => copyToClipboard(key.key)}
+                            onClick={() => copyToClipboard(`ak_${key.key_id}`)}
                           >
                             <Copy className="h-4 w-4" />
                           </Button>
@@ -181,12 +189,12 @@ export default function APIPage() {
                       <div className="flex items-center gap-2">
                         <Switch
                           checked={key.is_active}
-                          onCheckedChange={() => handleToggleKey(key.id, key.is_active)}
+                          onCheckedChange={() => handleToggleKey(key.key_id, key.is_active)}
                         />
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteKey(key.id)}
+                          onClick={() => handleDeleteKey(key.key_id)}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -211,7 +219,7 @@ export default function APIPage() {
               <div>
                 <h3 className="font-semibold mb-2">Base URL</h3>
                 <code className="block bg-muted p-2 rounded text-sm">
-                  https://wxpgvoftrhhsojwamlsa.supabase.co/rest/v1
+                  {API_URL}
                 </code>
               </div>
 
@@ -221,8 +229,7 @@ export default function APIPage() {
                   Include your API key in the request headers:
                 </p>
                 <pre className="bg-muted p-4 rounded text-xs overflow-x-auto">
-{`Authorization: Bearer YOUR_API_KEY
-apikey: YOUR_API_KEY
+{`x-api-key: YOUR_API_KEY
 Content-Type: application/json`}
                 </pre>
               </div>
@@ -234,25 +241,25 @@ Content-Type: application/json`}
                   <div className="space-y-3 ml-4">
                     <div>
                       <code className="text-sm bg-green-500/10 text-green-600 px-2 py-1 rounded">POST</code>
-                      <code className="ml-2 text-sm">/time_entries</code>
+                      <code className="ml-2 text-sm">/api/time_entries</code>
                       <p className="text-sm text-muted-foreground mt-1">Create a new time entry</p>
                     </div>
 
                     <div>
                       <code className="text-sm bg-blue-500/10 text-blue-600 px-2 py-1 rounded">GET</code>
-                      <code className="ml-2 text-sm">/time_entries</code>
+                      <code className="ml-2 text-sm">/api/time_entries</code>
                       <p className="text-sm text-muted-foreground mt-1">List all time entries</p>
                     </div>
 
                     <div>
                       <code className="text-sm bg-yellow-500/10 text-yellow-600 px-2 py-1 rounded">PATCH</code>
-                      <code className="ml-2 text-sm">/time_entries?id=eq.{"{id}"}</code>
+                      <code className="ml-2 text-sm">/api/time_entries/{"{id}"}</code>
                       <p className="text-sm text-muted-foreground mt-1">Update a time entry</p>
                     </div>
 
                     <div>
                       <code className="text-sm bg-red-500/10 text-red-600 px-2 py-1 rounded">DELETE</code>
-                      <code className="ml-2 text-sm">/time_entries?id=eq.{"{id}"}</code>
+                      <code className="ml-2 text-sm">/api/time_entries/{"{id}"}</code>
                       <p className="text-sm text-muted-foreground mt-1">Delete a time entry</p>
                     </div>
                   </div>
@@ -264,13 +271,13 @@ Content-Type: application/json`}
                   <div className="space-y-3 ml-4">
                     <div>
                       <code className="text-sm bg-green-500/10 text-green-600 px-2 py-1 rounded">POST</code>
-                      <code className="ml-2 text-sm">/projects</code>
+                      <code className="ml-2 text-sm">/api/projects</code>
                       <p className="text-sm text-muted-foreground mt-1">Create a new project</p>
                     </div>
 
                     <div>
                       <code className="text-sm bg-blue-500/10 text-blue-600 px-2 py-1 rounded">GET</code>
-                      <code className="ml-2 text-sm">/projects</code>
+                      <code className="ml-2 text-sm">/api/projects</code>
                       <p className="text-sm text-muted-foreground mt-1">List all projects</p>
                     </div>
                   </div>
@@ -293,11 +300,10 @@ Content-Type: application/json`}
                 <h3 className="font-semibold mb-2">JavaScript / Node.js</h3>
                 <pre className="bg-muted p-4 rounded text-xs overflow-x-auto">
 {`// Start a timer
-const response = await fetch('https://wxpgvoftrhhsojwamlsa.supabase.co/rest/v1/time_entries', {
+const response = await fetch('${API_URL}/api/time_entries', {
   method: 'POST',
   headers: {
-    'Authorization': 'Bearer YOUR_API_KEY',
-    'apikey': 'YOUR_API_KEY',
+    'x-api-key': 'YOUR_API_KEY',
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({
@@ -318,10 +324,9 @@ console.log(entry);`}
 {`import requests
 from datetime import datetime
 
-url = 'https://wxpgvoftrhhsojwamlsa.supabase.co/rest/v1/time_entries'
+url = '${API_URL}/api/time_entries'
 headers = {
-    'Authorization': 'Bearer YOUR_API_KEY',
-    'apikey': 'YOUR_API_KEY',
+    'x-api-key': 'YOUR_API_KEY',
     'Content-Type': 'application/json',
 }
 
@@ -339,11 +344,10 @@ print(response.json())`}
               <div>
                 <h3 className="font-semibold mb-2">cURL</h3>
                 <pre className="bg-muted p-4 rounded text-xs overflow-x-auto">
-{`curl -X POST \\
-  https://wxpgvoftrhhsojwamlsa.supabase.co/rest/v1/time_entries \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "apikey: YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
+{`curl -X POST \
+  ${API_URL}/api/time_entries \
+  -H "x-api-key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
   -d '{
     "project_id": "project-uuid",
     "description": "Working on feature",

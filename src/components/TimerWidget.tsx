@@ -28,24 +28,7 @@ export function TimerWidget() {
   const isRunning = timerState.isRunning && !timerState.isPaused;
   const isPaused = timerState.isPaused;
 
-  // Update menu bar title when timer state changes
-  useEffect(() => {
-    const updateMenuBar = async () => {
-      if (!isTauri) return;
-
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const elapsed = currentTime > 0 ? formatDuration(currentTime) : "";
-        const project = projects?.find(p => p.id === timerState.currentProjectId)?.name || "";
-        
-        await invoke('update_tray_title', { elapsed, project });
-      } catch (error) {
-        console.error('Failed to update menu bar:', error);
-      }
-    };
-
-    updateMenuBar();
-  }, [currentTime, timerState.currentProjectId, projects]);
+  // Menu bar updates centralized via tray-updater service
 
   useEffect(() => {
     let interval: NodeJS.Timeout | undefined;
@@ -129,11 +112,7 @@ export function TimerWidget() {
       storage.saveTimerState(newState);
       setCurrentTime(0);
       
-      // Clear menu bar
-      if (isTauri) {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('update_tray_title', { elapsed: "", project: "" });
-      }
+      // Tray title resets via tray-updater observing storage
     } catch (error) {
       console.error('Failed to save time entry:', error);
     }

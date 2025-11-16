@@ -1,41 +1,53 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/db/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export interface APIKey {
   id: string;
-  user_id: string;
-  name: string;
-  key: string;
+  key_id: string;
+  name: string | null;
   created_at: string;
   last_used_at: string | null;
   is_active: boolean;
 }
 
+export interface CreatedAPIKey {
+  keyId: string;
+  name: string | null;
+  apiKey: string; // Full value returned only at creation
+}
+
 export function useAPIKeys() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { getAuthHeaders } = useAuth();
 
   // Fetch all API keys
   const { data: apiKeys = [], isLoading, error } = useQuery({
     queryKey: ['apiKeys'],
     queryFn: async () => {
-      // Get user from localStorage
-      const storedUser = localStorage.getItem('user');
-      if (!storedUser) {
-        throw new Error('No user found. Please sign in.');
+      const response = await fetch(`${API_URL}/api/auth/api-keys`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to load API keys');
       }
-      const user = JSON.parse(storedUser);
-
-      const { data, error } = await supabase
-        .from('api_keys')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .execute();
-
-      if (error) throw error;
-      return data as APIKey[];
+      const keys = (data.keys || []) as any[];
+      return keys.map((k) => ({
+        id: String(k.id),
+        key_id: String(k.key_id),
+        name: k.name ?? null,
+        created_at: k.created_at,
+        last_used_at: k.last_used_at ?? null,
+        is_active: !Boolean(k.revoked_at),
+      })) as APIKey[];
     },
     staleTime: 30000,
   });
@@ -43,37 +55,29 @@ export function useAPIKeys() {
   // Create API key
   const createAPIKey = useMutation({
     mutationFn: async (name: string) => {
-      // Get user from localStorage
-      const storedUser = localStorage.getItem('user');
-      if (!storedUser) {
-        throw new Error('No user found. Please sign in.');
+      const response = await fetch(`${API_URL}/api/auth/api-keys`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ name }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to create API key');
       }
-      const user = JSON.parse(storedUser);
-
-      // Generate a random API key
-      const key = `tk_${Array.from(crypto.getRandomValues(new Uint8Array(32)))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('')}`;
-
-      const { data, error } = await supabase
-        .from('api_keys')
-        .insert([{
-          user_id: user.id,
-          name,
-          key,
-          is_active: true,
-        }]);
-
-      if (error) throw error;
-      
-      const newKey = Array.isArray(data) ? data[0] : data;
-      return newKey as APIKey;
+      return {
+        keyId: data.keyId,
+        name: data.name ?? null,
+        apiKey: data.apiKey,
+      } as CreatedAPIKey;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
       toast({
         title: 'API Key created',
-        description: 'Your new API key has been generated. Make sure to copy it now!',
+        description: 'Your new API key has been generated. Copy it now; it won’t be shown again.',
       });
     },
     onError: (error: Error) => {
@@ -87,22 +91,35 @@ export function useAPIKeys() {
 
   // Toggle API key active status
   const toggleAPIKey = useMutation({
-    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { data, error } = await supabase
-        .from('api_keys')
-        .update({ is_active })
-        .eq('id', id);
-
-      if (error) throw error;
-      
-      const updatedKey = Array.isArray(data) ? data[0] : data;
-      return updatedKey as APIKey;
+    mutationFn: async ({ keyId, active }: { keyId: string; active: boolean }) => {
+      const response = await fetch(`${API_URL}/api/auth/api-keys/${keyId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ active }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to update API key');
+      }
+      const k = data.key;
+      const updated: APIKey = {
+        id: String(k.id),
+        key_id: String(k.key_id),
+        name: k.name ?? null,
+        created_at: k.created_at,
+        last_used_at: k.last_used_at ?? null,
+        is_active: !Boolean(k.revoked_at),
+      };
+      return updated;
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
       toast({
-        title: variables.is_active ? 'API Key activated' : 'API Key deactivated',
-        description: `The API key has been ${variables.is_active ? 'activated' : 'deactivated'}.`,
+        title: variables.active ? 'API Key activated' : 'API Key deactivated',
+        description: `The API key has been ${variables.active ? 'activated' : 'deactivated'}.`,
       });
     },
     onError: (error: Error) => {
@@ -116,19 +133,24 @@ export function useAPIKeys() {
 
   // Delete API key
   const deleteAPIKey = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('api_keys')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+    mutationFn: async (keyId: string) => {
+      const response = await fetch(`${API_URL}/api/auth/api-keys/${keyId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to delete API key');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
       toast({
         title: 'API Key deleted',
-        description: 'The API key has been permanently deleted.',
+        description: 'The API key has been revoked.',
       });
     },
     onError: (error: Error) => {
@@ -145,6 +167,7 @@ export function useAPIKeys() {
     isLoading,
     error,
     createAPIKey: createAPIKey.mutate,
+    createAPIKeyAsync: createAPIKey.mutateAsync,
     toggleAPIKey: toggleAPIKey.mutate,
     deleteAPIKey: deleteAPIKey.mutate,
     isCreating: createAPIKey.isPending,

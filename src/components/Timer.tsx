@@ -49,24 +49,7 @@ export function Timer() {
   const { tags, isLoading: isLoadingTags } = useTags();
   const { addEntry, isAdding } = useTimeEntries();
 
-  // Update menu bar title when timer state changes (Tauri only)
-  useEffect(() => {
-    const updateMenuBar = async () => {
-      if (typeof window === 'undefined' || !('__TAURI__' in window)) return;
-
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const elapsed = currentTime > 0 ? formatDuration(currentTime) : "";
-        const project = projects?.find(p => p.id === timerState.currentProjectId)?.name || "";
-        
-        await invoke('update_tray_title', { elapsed, project });
-      } catch (error) {
-        console.error('Failed to update menu bar:', error);
-      }
-    };
-
-    updateMenuBar();
-  }, [currentTime, timerState.currentProjectId, projects]);
+  // Menu bar updates centralized via tray-updater service; no direct invokes here
 
   useEffect(() => {
     setDescription(timerState.currentDescription);
@@ -168,12 +151,7 @@ export function Timer() {
     setDescription("");
     setSelectedTags([]);
 
-    // Clear menu bar (Tauri only)
-    if (typeof window !== 'undefined' && '__TAURI__' in window) {
-      import('@tauri-apps/api/core').then(({ invoke }) => {
-        invoke('update_tray_title', { elapsed: "", project: "" }).catch(console.error);
-      });
-    }
+    // Tray title will reset automatically via tray-updater observing storage
   };
 
   const cancelTimer = () => {
