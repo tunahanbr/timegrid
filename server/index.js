@@ -14,15 +14,17 @@ const { Pool } = pkg;
 dotenv.config();
 
 const app = express();
+// Trust first proxy (useful when behind reverse proxy)
+app.set('trust proxy', 1);
 const port = process.env.PORT || 3000;
 
 // PostgreSQL connection pool with optimized settings
 const pool = new Pool({
-  host: process.env.VITE_DB_HOST || 'localhost',
-  port: parseInt(process.env.VITE_DB_PORT || '5432'),
-  database: process.env.VITE_DB_NAME || 'timetrack',
-  user: process.env.VITE_DB_USER || 'timetrack',
-  password: process.env.VITE_DB_PASSWORD || 'timetrack_dev_password',
+  host: process.env.PGHOST || process.env.VITE_DB_HOST || 'localhost',
+  port: parseInt(process.env.PGPORT || process.env.VITE_DB_PORT || '5432'),
+  database: process.env.PGDATABASE || process.env.VITE_DB_NAME || 'timetrack',
+  user: process.env.PGUSER || process.env.VITE_DB_USER || 'timetrack',
+  password: process.env.PGPASSWORD || process.env.VITE_DB_PASSWORD || 'timetrack_dev_password',
   max: 10, // Reduced from 20 (more efficient for small apps)
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
@@ -72,15 +74,25 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // CORS - Restrict to frontend origin only
+// Support multiple frontend origins via env
+const envOriginsRaw = process.env.FRONTEND_URLS || process.env.FRONTEND_URL || '';
+const envOrigins = envOriginsRaw
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const devOrigins = [
+  'http://localhost:8080',
+  'http://localhost:8081',
+  'http://localhost:5173',
+  'http://localhost:4173',
+];
+
 const allowedOrigins = [
-  'http://localhost:5173', // Vite dev
-  'http://localhost:8080', // Tauri dev
-  'http://localhost:8081', // Vite dev (alternate port)
-  'http://localhost:4173', // Vite preview
-  'tauri://localhost', // Tauri production
-  'https://tauri.localhost', // Tauri production (alternative)
-  process.env.FRONTEND_URL, // Production frontend
-].filter(Boolean);
+  'tauri://localhost', // Tauri app
+  ...(process.env.NODE_ENV === 'production' ? [] : devOrigins),
+  ...envOrigins,
+];
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -148,6 +160,10 @@ app.use(express.json({ limit: '1mb' }));
 
 // JWT secret (use a strong secret in production)
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_in_production';
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET must be set in production.');
+  process.exit(1);
+}
 const JWT_EXPIRES_IN = '7d'; // Token valid for 7 days
 const REFRESH_TOKEN_EXPIRES_DAYS = 30; // Refresh token valid for 30 days
 

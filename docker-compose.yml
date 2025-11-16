@@ -10,12 +10,47 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d
+      - ./server/migrations:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U timetrack"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: timetrack-backend
+    environment:
+      # Database connection (matches postgres service)
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: timetrack
+      PGUSER: timetrack
+      PGPASSWORD: timetrack_dev_password
+      # Auth + CORS
+      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_production}
+      FRONTEND_URLS: ${FRONTEND_URLS:-http://localhost:8080,tauri://localhost}
+      NODE_ENV: ${NODE_ENV:-production}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        # Set API base URL for build-time; change to your external API domain
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    container_name: timetrack-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
 
   # Optional: pgAdmin for database management
   pgadmin:

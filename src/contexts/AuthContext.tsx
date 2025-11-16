@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { logger } from "@/lib/logger";
+import { API_URL } from "@/lib/init";
 
-// JWT API base URL
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 // User type
 interface User {
@@ -98,6 +97,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       const data = await response.json();
+
+      if (!response.ok) {
+        return { error: { message: data.error || data.message || `HTTP ${response.status}: ${response.statusText}` } };
+      }
 
       if (data.error) {
         return { error: { message: data.error } };

@@ -3,6 +3,9 @@ import { setProjectsGetter } from "./tray-updater";
 import { supabaseStorage } from "./supabase-storage";
 import { offlineStorage } from "./offline-storage";
 
+// Centralized API base URL
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
 export const initializeApp = async () => {
   // Migrate any existing localStorage data to filesystem (Tauri only)
   try {

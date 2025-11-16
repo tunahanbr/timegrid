@@ -41,11 +41,11 @@ async function applyMigration(client, filePath, filename) {
 
 async function run() {
   const client = new Client({
-    host: process.env.VITE_DB_HOST || 'localhost',
-    port: parseInt(process.env.VITE_DB_PORT || '5432'),
-    database: process.env.VITE_DB_NAME || 'timetrack',
-    user: process.env.VITE_DB_USER || 'timetrack',
-    password: process.env.VITE_DB_PASSWORD || 'timetrack_dev_password',
+    host: process.env.PGHOST || process.env.VITE_DB_HOST || 'localhost',
+    port: parseInt(process.env.PGPORT || process.env.VITE_DB_PORT || '5432'),
+    database: process.env.PGDATABASE || process.env.VITE_DB_NAME || 'timetrack',
+    user: process.env.PGUSER || process.env.VITE_DB_USER || 'timetrack',
+    password: process.env.PGPASSWORD || process.env.VITE_DB_PASSWORD || 'timetrack_dev_password',
   });
 
   await client.connect();
