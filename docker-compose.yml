@@ -32,7 +32,7 @@ services:
       # Auth + CORS
       JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_production}
       FRONTEND_URLS: ${FRONTEND_URLS:-http://localhost:8080,tauri://localhost}
-      NODE_ENV: ${NODE_ENV:-production}
+      NODE_ENV: ${NODE_ENV:-development}
     ports:
       - "3000:3000"
     depends_on:

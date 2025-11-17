@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { LogOut, Loader2, X } from "lucide-react";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { MobileTabBar } from "@/components/MobileTabBar";
 
 // Lazy load pages for code splitting
 const TimerPage = lazy(() => import("./pages/TimerPage"));
@@ -74,8 +76,9 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
-  // Global keyboard shortcuts
+  // Global keyboard shortcuts (disabled on mobile)
   useKeyboardShortcuts([
     {
       key: 'p',
@@ -107,7 +110,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       callback: () => setShowShortcutsDialog(true),
       description: 'Show keyboard shortcuts',
     },
-  ], !!user);
+  ], !!user && !isMobile);
 
   useEffect(() => {
     const updateTodayTotal = () => {
@@ -129,35 +132,35 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+      <div className="fixed inset-0 flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
           <header 
-            className="h-14 border-b border-border flex items-center justify-between px-8" 
+            className={(isMobile ? "h-12 px-4" : "h-14 px-8") + " sticky top-0 z-40 bg-background flex items-center justify-between " + (isMobile ? "" : "border-b border-border")}
             data-tauri-drag-region
             role="banner"
             aria-label="Application header"
-            style={{ paddingTop: '0px' }}
+            style={{ paddingTop: isMobile ? 'env(safe-area-inset-top)' : '0px' }}
           >
-            <div className="flex items-center gap-6">
+            <div className={isMobile ? "flex items-center gap-3" : "flex items-center gap-6"}>
               {/* Space for native macOS traffic lights */}
               {typeof window !== 'undefined' && (window as any).__TAURI__ && (
                 <div className="w-20 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties} />
               )}
               <SidebarTrigger aria-label="Toggle navigation menu" />
-              <div className="text-sm font-medium" role="status" aria-live="polite" aria-label="Today's total time">
+              <div className={isMobile ? "text-xs font-medium" : "text-sm font-medium"} role="status" aria-live="polite" aria-label="Today's total time">
                 Today: <span className="font-mono text-primary">{formatDurationShort(todayTotal)}</span>
               </div>
-              {user && (
+              {user && !isMobile && (
                 <div className="text-sm text-muted-foreground" aria-label="Current user email">
                   {user.email}
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2" role="toolbar" aria-label="Header actions">
+            <div className={isMobile ? "flex items-center gap-1" : "flex items-center gap-2"} role="toolbar" aria-label="Header actions">
               <SyncIndicator />
               <ThemeToggle />
-              {user && (
+              {user && !isMobile && (
                 <Button variant="ghost" size="sm" onClick={handleSignOut} aria-label="Sign out of account">
                   <LogOut className="h-4 w-4 mr-2" aria-hidden="true" />
                   Sign Out
@@ -165,12 +168,25 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               )}
             </div>
           </header>
-          <main className="flex-1" role="main" aria-label="Main content">{children}</main>
+          <main 
+            className={"flex-1 overflow-auto " + (isMobile ? "pb-16" : "")} 
+            role="main" 
+            aria-label="Main content"
+            style={{ 
+              paddingBottom: isMobile ? 'calc(env(safe-area-inset-bottom) + 56px)' : undefined,
+              WebkitOverflowScrolling: 'touch'
+            }}
+          >
+            {children}
+          </main>
+          {isMobile && <MobileTabBar />}
         </div>
-        <KeyboardShortcutsDialog 
-          open={showShortcutsDialog} 
-          onOpenChange={setShowShortcutsDialog} 
-        />
+        {!isMobile && (
+          <KeyboardShortcutsDialog 
+            open={showShortcutsDialog} 
+            onOpenChange={setShowShortcutsDialog} 
+          />
+        )}
       </div>
     </SidebarProvider>
   );

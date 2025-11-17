@@ -26,6 +26,7 @@ import { useProjects } from "@/hooks/useProjects";
 import { useTimeEntries } from "@/hooks/useTimeEntries";
 import { useTags } from "@/hooks/useTags";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { X as XIcon } from "lucide-react";
 import { useTauriEvents } from "@/hooks/useTauriEvents";
@@ -48,6 +49,7 @@ export function Timer() {
   const { projects, isLoading: isLoadingProjects } = useProjects();
   const { tags, isLoading: isLoadingTags } = useTags();
   const { addEntry, isAdding } = useTimeEntries();
+  const isMobile = useIsMobile();
 
   // Menu bar updates centralized via tray-updater service; no direct invokes here
 
@@ -223,7 +225,7 @@ export function Timer() {
 
   useTauriEvents(handleToggleTimer);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (disabled on mobile)
   useKeyboardShortcuts([
     {
       key: ' ',
@@ -256,22 +258,24 @@ export function Timer() {
       },
       description: 'Cancel timer',
     },
-  ]);
+  ], !isMobile);
 
   return (
     <div className="relative flex flex-col items-center justify-center min-h-[60vh] space-y-8">
-      {/* Keyboard hint */}
-      <div className="absolute top-4 right-8 text-xs text-muted-foreground">
-        <kbd className="px-2 py-1 bg-muted rounded">Space</kbd> to start/pause
-        {(isRunning || isPaused) && (
-          <>
-            {" • "}
-            <kbd className="px-2 py-1 bg-muted rounded">S</kbd> to stop
-            {" • "}
-            <kbd className="px-2 py-1 bg-muted rounded">Esc</kbd> to cancel
-          </>
-        )}
-      </div>
+      {/* Keyboard hint (desktop only) */}
+      {!isMobile && (
+        <div className="absolute top-4 right-8 text-xs text-muted-foreground">
+          <kbd className="px-2 py-1 bg-muted rounded">Space</kbd> to start/pause
+          {(isRunning || isPaused) && (
+            <>
+              {" • "}
+              <kbd className="px-2 py-1 bg-muted rounded">S</kbd> to stop
+              {" • "}
+              <kbd className="px-2 py-1 bg-muted rounded">Esc</kbd> to cancel
+            </>
+          )}
+        </div>
+      )}
       <div
         className={cn(
           "relative flex items-center justify-center w-80 h-80 rounded border-2 transition-all duration-300",

@@ -103,6 +103,10 @@ All colors MUST be HSL.
 }
 
 @layer base {
+  html {
+    @apply bg-background text-foreground;
+  }
+
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@600&display=swap');
 
   * {
@@ -112,6 +116,9 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', sans-serif;
+    min-height: 100svh;
+    overscroll-behavior: contain;
+    overflow: hidden;
   }
 
   .timer-digits {

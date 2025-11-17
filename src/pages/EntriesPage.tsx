@@ -40,8 +40,10 @@ import { toast } from "sonner";
 import type { TimeEntry } from "@/lib/supabase-storage";
 import { Badge } from "@/components/ui/badge";
 import { useTags } from "@/hooks/useTags";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function EntriesPage() {
+  const isMobile = useIsMobile();
   const [filters, setFilters] = useState<FilterState>({
     dateRange: { from: undefined, to: undefined },
     projectIds: [],
@@ -214,7 +216,7 @@ export default function EntriesPage() {
   const isLoading = isLoadingEntries || isLoadingProjects;
 
   return (
-    <div className="container mx-auto px-8 py-8">
+    <div className="container mx-auto px-4 sm:px-8 py-8">
       {isDatabaseError && (
         <Alert variant="destructive" className="mb-6">
           <AlertCircle className="h-4 w-4" />
@@ -226,7 +228,7 @@ export default function EntriesPage() {
       )}
 
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Time Entries</h1>
             <p className="text-sm text-muted-foreground mt-2">
@@ -250,7 +252,7 @@ export default function EntriesPage() {
             </p>
           </div>
           {filteredEntries.length > 0 && !isLoading && (
-            <div className="flex gap-2" role="group" aria-label="Time entries actions">
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Time entries actions">
               <div className="flex items-center gap-2 mr-2">
                 <Checkbox
                   checked={selectedEntries.size > 0 && selectedEntries.size === filteredEntries.length}
@@ -365,8 +367,8 @@ export default function EntriesPage() {
                       <div
                         key={entry.id}
                         className={cn(
-                          "group flex items-center gap-4 p-3 rounded hover:bg-surface transition-colors animate-slide-in",
-                          isSelected && "bg-surface ring-2 ring-primary"
+                          "group flex items-center gap-4 p-2 sm:p-3 rounded hover:bg-surface transition-colors animate-slide-in select-none sm:select-text",
+                          isSelected && "bg-surface sm:ring-2 sm:ring-primary"
                         )}
                         style={{ animationDelay: `${index * 30}ms` }}
                       >
@@ -421,7 +423,7 @@ export default function EntriesPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => openEditDialog(entry)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                          className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0"
                           title="Edit entry"
                           aria-label={`Edit time entry for ${project?.name || 'Unknown project'}`}
                         >
@@ -431,7 +433,7 @@ export default function EntriesPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => deleteEntry(entry.id)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                          className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0"
                           title="Delete entry"
                           aria-label={`Delete time entry for ${project?.name || 'Unknown project'}`}
                         >
@@ -461,24 +463,42 @@ export default function EntriesPage() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="edit-project">Project *</Label>
-              <Select value={editProject} onValueChange={setEditProject}>
-                <SelectTrigger id="edit-project">
-                  <SelectValue placeholder="Select a project" />
-                </SelectTrigger>
-                <SelectContent>
+              {isMobile ? (
+                <select
+                  id="edit-project"
+                  value={editProject}
+                  onChange={(e) => setEditProject(e.target.value)}
+                  className="h-9 w-full rounded-md border bg-background px-2"
+                >
+                  <option value="" disabled>
+                    Select a project
+                  </option>
                   {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: project.color }}
-                        />
-                        <span>{project.name}</span>
-                      </div>
-                    </SelectItem>
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
                   ))}
-                </SelectContent>
-              </Select>
+                </select>
+              ) : (
+                <Select value={editProject} onValueChange={setEditProject}>
+                  <SelectTrigger id="edit-project">
+                    <SelectValue placeholder="Select a project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: project.color }}
+                          />
+                          <span>{project.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -494,38 +514,60 @@ export default function EntriesPage() {
 
             <div className="space-y-2">
               <Label>Tags</Label>
-              <Select 
-                value="" 
-                onValueChange={(tagId) => {
-                  const tag = tags.find(t => t.id === tagId);
-                  if (tag && !editTags.includes(tag.name)) {
-                    setEditTags([...editTags, tag.name]);
-                  }
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Add tags..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {tags.length === 0 ? (
-                    <div className="p-2 text-sm text-muted-foreground">
-                      No tags yet
-                    </div>
-                  ) : (
-                    tags.map((tag) => (
-                      <SelectItem key={tag.id} value={tag.id}>
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: tag.color }}
-                          />
-                          <span>{tag.name}</span>
-                        </div>
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              {isMobile ? (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const tagId = e.target.value;
+                    const tag = tags.find((t) => t.id === tagId);
+                    if (tag && !editTags.includes(tag.name)) {
+                      setEditTags([...editTags, tag.name]);
+                    }
+                    e.currentTarget.selectedIndex = 0;
+                  }}
+                  className="h-9 w-full rounded-md border bg-background px-2"
+                >
+                  <option value="">Add tags...</option>
+                  {tags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <Select 
+                  value="" 
+                  onValueChange={(tagId) => {
+                    const tag = tags.find(t => t.id === tagId);
+                    if (tag && !editTags.includes(tag.name)) {
+                      setEditTags([...editTags, tag.name]);
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Add tags..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tags.length === 0 ? (
+                      <div className="p-2 text-sm text-muted-foreground">
+                        No tags yet
+                      </div>
+                    ) : (
+                      tags.map((tag) => (
+                        <SelectItem key={tag.id} value={tag.id}>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: tag.color }}
+                            />
+                            <span>{tag.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
               
               {editTags.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">

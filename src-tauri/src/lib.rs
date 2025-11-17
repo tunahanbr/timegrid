@@ -1,10 +1,16 @@
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent, TrayIconId},
     Manager, WindowEvent, PhysicalPosition, Position, Size,
 };
 
+// Desktop-only imports (not available on mobile builds)
+#[cfg(desktop)]
+use tauri::{
+    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent, TrayIconId},
+};
+
 // Command to update the tray title with timer info
+#[cfg(desktop)]
 #[tauri::command]
 fn update_tray_title(
     app: tauri::AppHandle,
@@ -31,8 +37,20 @@ fn update_tray_title(
     Ok(())
 }
 
+// Mobile: noop implementation to keep the command available
+#[cfg(mobile)]
+#[tauri::command]
+fn update_tray_title(
+    _app: tauri::AppHandle,
+    _elapsed: String,
+    _project: String,
+) -> Result<(), String> {
+    Ok(())
+}
+
 // Helper function to position widget window below tray icon
-fn position_widget_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {    
+#[cfg(desktop)]
+fn position_widget_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(widget) = app.get_webview_window("timer-widget") {
         if let Some(tray) = app.tray_by_id(&TrayIconId::new("main-tray")) {
             // Get tray icon position
@@ -73,7 +91,8 @@ pub fn run() {
                         .build(),
                 )?;
             }
-
+            #[cfg(desktop)]
+            {
             // Create native application menu (macOS standard menus)
             let app_name = "TimeGrid";
             
@@ -285,7 +304,7 @@ pub fn run() {
                 });
             }
 
-                        // Handle window close for main window - minimize to tray instead of quitting
+            // Handle window close for main window - minimize to tray instead of quitting
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
                 window.on_window_event(move |event| {
@@ -296,7 +315,7 @@ pub fn run() {
                     }
                 });
             }
-
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![update_tray_title])
