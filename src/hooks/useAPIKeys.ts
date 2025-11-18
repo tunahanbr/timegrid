@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { getApiUrl } from '@/lib/init';
 
 export interface APIKey {
   id: string;
@@ -28,7 +27,7 @@ export function useAPIKeys() {
   const { data: apiKeys = [], isLoading, error } = useQuery({
     queryKey: ['apiKeys'],
     queryFn: async () => {
-      const response = await fetch(`${API_URL}/api/auth/api-keys`, {
+      const response = await fetch(`${getApiUrl()}/api/auth/api-keys`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -55,7 +54,7 @@ export function useAPIKeys() {
   // Create API key
   const createAPIKey = useMutation({
     mutationFn: async (name: string) => {
-      const response = await fetch(`${API_URL}/api/auth/api-keys`, {
+      const response = await fetch(`${getApiUrl()}/api/auth/api-keys`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -92,7 +91,7 @@ export function useAPIKeys() {
   // Toggle API key active status
   const toggleAPIKey = useMutation({
     mutationFn: async ({ keyId, active }: { keyId: string; active: boolean }) => {
-      const response = await fetch(`${API_URL}/api/auth/api-keys/${keyId}`, {
+      const response = await fetch(`${getApiUrl()}/api/auth/api-keys/${keyId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -134,7 +133,7 @@ export function useAPIKeys() {
   // Delete API key
   const deleteAPIKey = useMutation({
     mutationFn: async (keyId: string) => {
-      const response = await fetch(`${API_URL}/api/auth/api-keys/${keyId}`, {
+      const response = await fetch(`${getApiUrl()}/api/auth/api-keys/${keyId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

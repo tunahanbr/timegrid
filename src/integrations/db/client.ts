@@ -1,7 +1,7 @@
 // Browser-compatible client that communicates with backend API
 // Provides Supabase-compatible interface
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { getApiUrl } from '@/lib/init';
 
 // Helper to get auth token
 function getAuthHeaders() {
@@ -11,7 +11,7 @@ function getAuthHeaders() {
 
 // Helper function for API calls with authentication
 async function apiCall(endpoint: string, options: RequestInit = {}) {
-  const response = await fetch(`${API_URL}${endpoint}`, {
+  const response = await fetch(`${getApiUrl()}${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

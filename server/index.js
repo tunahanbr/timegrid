@@ -9,6 +9,7 @@ import compression from 'compression';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
+import os from 'os';
 
 const { Pool } = pkg;
 dotenv.config();
@@ -59,7 +60,20 @@ app.use(helmet({
     useDefaults: true,
     directives: {
       defaultSrc: ["'self'"],
-      connectSrc: ["'self'", 'http://localhost:3000', 'http://localhost:5173', 'http://localhost:8080', 'http://localhost:8081', 'tauri://localhost', 'https://tauri.localhost'].filter(Boolean),
+      connectSrc: [
+        "'self'",
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://localhost:8080',
+        'http://localhost:8081',
+        'http://localhost:8082',
+        // Android emulator host loopback
+        'http://10.0.2.2:3000',
+        'http://10.0.2.2:5173',
+        'http://10.0.2.2:8082',
+        'tauri://localhost',
+        'https://tauri.localhost'
+      ].filter(Boolean),
       imgSrc: ["'self'", 'data:'],
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'"],
@@ -84,13 +98,40 @@ const envOrigins = envOriginsRaw
 const devOrigins = [
   'http://localhost:8080',
   'http://localhost:8081',
+  'http://localhost:8082',
   'http://localhost:5173',
   'http://localhost:4173',
+  // Android emulator host loopback for dev servers if needed
+  'http://10.0.2.2:8082',
+  'http://10.0.2.2:5173',
 ];
+
+// Dynamically include LAN IP dev server origins (useful for Android physical devices)
+function getLanOrigins() {
+  try {
+    const nets = os.networkInterfaces();
+    const addrs = Object.values(nets)
+      .flat()
+      .filter((iface) => iface && iface.family === 'IPv4' && !iface.internal)
+      .map((iface) => iface.address);
+    const ports = [8082, 5173, 8081, 8080];
+    const origins = [];
+    for (const ip of addrs) {
+      for (const port of ports) {
+        origins.push(`http://${ip}:${port}`);
+      }
+    }
+    return origins;
+  } catch (e) {
+    console.warn('⚠️  Failed to determine LAN IPs for CORS:', e);
+    return [];
+  }
+}
 
 const allowedOrigins = [
   'tauri://localhost', // Tauri app
   ...(process.env.NODE_ENV === 'production' ? [] : devOrigins),
+  ...(process.env.NODE_ENV === 'production' ? [] : getLanOrigins()),
   ...envOrigins,
 ];
 
@@ -102,6 +143,19 @@ app.use(cors({
     // Allow any tauri:// protocol
     if (origin && origin.startsWith('tauri://')) {
       return callback(null, true);
+    }
+    // Allow LAN dev server origins (Android devices over Wi‑Fi) in dev mode
+    const isDev = process.env.NODE_ENV !== 'production';
+    if (isDev) {
+      try {
+        // Match http://10.x.x.x:PORT, http://192.168.x.x:PORT, http://172.16-31.x.x:PORT
+        const lanRegex = /^http:\/\/(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1]))[0-9\.]*:(8082|5173|8081|8080)$/;
+        if (lanRegex.test(origin)) {
+          return callback(null, true);
+        }
+      } catch (e) {
+        console.warn('⚠️  LAN origin test failed:', e);
+      }
     }
     
     if (allowedOrigins.indexOf(origin) !== -1) {

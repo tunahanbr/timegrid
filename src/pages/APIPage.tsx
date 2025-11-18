@@ -11,12 +11,13 @@ import { useAPIKeys } from "@/hooks/useAPIKeys";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+import { getApiUrl, setApiUrlOverride, clearApiUrlOverride } from "@/lib/init";
 
 export default function APIPage() {
   const { toast } = useToast();
   const [newKeyName, setNewKeyName] = useState("");
   const [createdKey, setCreatedKey] = useState<{ apiKey: string; keyId: string; name: string | null } | null>(null);
+  const [apiOverride, setApiOverride] = useState<string>(getApiUrl());
 
   // Use the custom hook for all API key operations
   const { apiKeys, isLoading, createAPIKeyAsync, deleteAPIKey, toggleAPIKey } = useAPIKeys();
@@ -67,6 +68,39 @@ export default function APIPage() {
           Integrate with third-party tools using our REST API
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>API Base URL</CardTitle>
+          <CardDescription>Set or override the API endpoint used by the app</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 items-end">
+            <div>
+              <Label htmlFor="apiBase">Current</Label>
+              <Input id="apiBase" value={apiOverride} onChange={(e) => setApiOverride(e.target.value)} />
+            </div>
+            <Button
+              variant="default"
+              onClick={() => {
+                const saved = setApiUrlOverride(apiOverride);
+                setApiOverride(saved);
+                toast({ title: 'API URL saved', description: saved });
+              }}
+            >Save</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                clearApiUrlOverride();
+                const base = getApiUrl();
+                setApiOverride(base);
+                toast({ title: 'API URL reset', description: base });
+              }}
+            >Reset</Button>
+          </div>
+          <div className="text-xs text-muted-foreground">Effective base: {getApiUrl()}</div>
+        </CardContent>
+      </Card>
 
       <Alert>
         <AlertCircle className="h-4 w-4" />
@@ -219,7 +253,7 @@ export default function APIPage() {
               <div>
                 <h3 className="font-semibold mb-2">Base URL</h3>
                 <code className="block bg-muted p-2 rounded text-sm">
-                  {API_URL}
+                  {getApiUrl()}
                 </code>
               </div>
 
@@ -300,7 +334,7 @@ Content-Type: application/json`}
                 <h3 className="font-semibold mb-2">JavaScript / Node.js</h3>
                 <pre className="bg-muted p-4 rounded text-xs overflow-x-auto">
 {`// Start a timer
-const response = await fetch('${API_URL}/api/time_entries', {
+const response = await fetch('${getApiUrl()}/api/time_entries', {
   method: 'POST',
   headers: {
     'x-api-key': 'YOUR_API_KEY',
@@ -324,7 +358,7 @@ console.log(entry);`}
 {`import requests
 from datetime import datetime
 
-url = '${API_URL}/api/time_entries'
+url = '${getApiUrl()}/api/time_entries'
 headers = {
     'x-api-key': 'YOUR_API_KEY',
     'Content-Type': 'application/json',
@@ -345,7 +379,7 @@ print(response.json())`}
                 <h3 className="font-semibold mb-2">cURL</h3>
                 <pre className="bg-muted p-4 rounded text-xs overflow-x-auto">
 {`curl -X POST \
-  ${API_URL}/api/time_entries \
+  ${getApiUrl()}/api/time_entries \
   -H "x-api-key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

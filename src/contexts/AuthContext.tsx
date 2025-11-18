@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { logger } from "@/lib/logger";
-import { API_URL } from "@/lib/init";
+import { getApiUrl } from "@/lib/init";
 
 
 // User type
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         // Verify token by fetching current user
-        const response = await fetch(`${API_URL}/api/auth/user`, {
+        const response = await fetch(`${getApiUrl()}/api/auth/user`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/auth/signup`, {
+      const response = await fetch(`${getApiUrl()}/api/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -122,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/auth/signin`, {
+      const response = await fetch(`${getApiUrl()}/api/auth/signin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -160,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       // Call signout endpoint (optional with JWT)
-      await fetch(`${API_URL}/api/auth/signout`, {
+      await fetch(`${getApiUrl()}/api/auth/signout`, {
         method: 'POST',
         headers: getAuthHeaders(),
       });
