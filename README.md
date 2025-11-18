@@ -1,43 +1,139 @@
 # TimeGrid - Advanced Time Tracking Application
 
-A modern time tracking application with advanced reporting, team collaboration, and billing features.
+TimeGrid is a modern time tracking application with advanced reporting, team collaboration, and billing features.
 
-## 🚀 Quick Start
+---
 
+## �️ Project Structure
+
+- `frontend/` — React + Vite app (web client)
+- `backend/` — Node.js/Express API server and migrations
+- `desktop/` — Tauri (desktop app)
+- `mobile/` — (Reserved for iOS/Android)
+- `docker/` — Dockerfiles, Compose, and configs
+- `scripts/` — Setup and deployment scripts
+- `docs/` — Documentation (platform, deployment, etc.)
+- `.archive/` — Obsolete or backup files
+
+---
+
+## 🚀 Onboarding & Setup
+
+### 1. Prerequisites
+- Node.js (LTS recommended)
+- Bun (for frontend)
+- Docker & Docker Compose
+- Rust (for desktop/Tauri)
+- PostgreSQL (if not using Docker)
+
+### 2. Clone & Install
 ```sh
-# Install dependencies
-bun install
+git clone <repo-url>
+cd timegrid
+# Install frontend dependencies
+cd frontend && bun install
+# Install backend dependencies (if any)
+# (e.g., npm install in backend/server if needed)
+```
 
-# Set up environment (PostgreSQL + API server required)
-cp .env.example .env
-# Edit .env with your database credentials
+### 3. Environment Setup
+- Copy `.env.example` to `.env` in the root or as needed in `frontend/` and `backend/`.
+- Edit `.env` files with your credentials and URLs.
 
-# Start PostgreSQL (via Docker)
-docker-compose up -d
+### 4. Local Development
+#### Start with Docker (recommended)
+```sh
+cd docker
+docker-compose up --build
+```
+- Frontend: http://localhost:8080
+- API: http://localhost:3000/health
 
-# Start API server (in another terminal)
-cd server && node index.js
-
-# Start development server
+#### Manual (advanced)
+Start PostgreSQL (locally or via Docker)
+```sh
+# Backend
+cd backend/server
+node index.js
+# Frontend (in another terminal)
+cd frontend
 bun run dev
 ```
 
-## 🐳 Deploy with Docker
+#### Desktop (Tauri)
+```sh
+cd desktop/src-tauri
+# Set VITE_API_URL in frontend/.env or as build arg
+npm run tauri dev
+```
 
-This repo includes a ready-to-run Docker stack for the API, database, and static frontend.
+#### Mobile
+- (Reserved for future iOS/Android setup)
 
-### Quick Start
-- Copy `.env.example` to `.env` and set at least:
-  - `JWT_SECRET` to a strong random string
-  - `FRONTEND_URLS` to your frontend origins (comma-separated)
-  - `VITE_API_URL` to your backend external URL
-- Start everything:
-  - `docker-compose up --build`
-- Visit:
-  - Frontend: `http://localhost:8080`
-  - API health: `http://localhost:3000/health`
+---
 
-### What “migrations” mean
+## 🐳 Deployment
+
+### Deploy with Docker
+1. Set all required environment variables in `.env`.
+2. Run:
+   ```sh
+   cd docker
+   docker-compose up --build -d
+   ```
+3. Configure your reverse proxy (e.g., Nginx, Cloudflare Tunnel) to point to the correct ports.
+
+### Manual Deployment
+- Build frontend: `cd frontend && bun run build`
+- Deploy backend: `cd backend/server && node index.js`
+- (See docs/deployment/ for advanced scenarios)
+
+### Desktop (Tauri)
+- Build: `cd desktop/src-tauri && npm run tauri build`
+- Distribute binaries as needed for Windows/macOS/Linux
+
+### Mobile
+- (Reserved for future iOS/Android deployment)
+
+---
+
+## 🧭 Navigation & Docs
+
+- See `docs/` for platform and deployment guides
+- See `docker/` for all container configs
+- See `scripts/` for setup and deployment helpers
+- See `.archive/` for old/test files
+
+---
+
+## 🏗️ Architecture & Features
+
+- **Frontend**: React + Vite (port 8080/8081)
+- **API**: Express.js with JWT authentication (port 3000)
+- **Database**: PostgreSQL 15 (Docker)
+- **Security**: Helmet, CORS, Rate Limiting, Input Validation
+
+See `docs/` for more details and advanced features.
+
+---
+
+## 🛠️ Tech Stack
+
+React 18 • TypeScript • Vite • Tailwind CSS • shadcn/ui • Recharts • Supabase • Node.js • Express • Tauri • Docker
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repo
+2. Create a feature branch
+3. Submit a pull request
+
+---
+
+## 📄 License
+
+MIT
 - Migrations are versioned SQL files that create/alter tables safely over time.
 - On first run, Postgres executes SQL files from `server/migrations/` via `docker-entrypoint-initdb.d`.
 - On subsequent runs, the backend also runs `server/run-migrations.js` which tracks applied files in a `schema_migrations` table and applies any new ones.
