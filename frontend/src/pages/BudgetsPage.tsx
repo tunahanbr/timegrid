@@ -44,7 +44,7 @@ export default function BudgetsPage() {
     if (!formData.project_id || !formData.amount) return;
 
     const budgetData = {
-      project_id: formData.project_id,
+      project_id: parseInt(formData.project_id),
       amount: parseFloat(formData.amount),
       currency: formData.currency,
       period: formData.period as 'monthly' | 'quarterly' | 'yearly' | 'total',
@@ -128,11 +128,13 @@ export default function BudgetsPage() {
 
   const budgetsWithProjects = budgets.map(budget => {
     const project = projects.find(p => p.id === budget.project_id);
-    const spent = calculateSpent(budget.project_id, budget);
-    const percentage = (spent / budget.amount) * 100;
-    const status = getBudgetStatus(percentage, budget.alert_threshold);
+    const spent = calculateSpent(String(budget.project_id), budget);
+    const budgetAmount = typeof budget.amount === 'string' ? parseFloat(budget.amount) : budget.amount;
+    const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
+    const alertThreshold = typeof budget.alert_threshold === 'string' ? parseFloat(budget.alert_threshold) : budget.alert_threshold;
+    const status = getBudgetStatus(percentage, alertThreshold);
 
-    return { budget, project, spent, percentage, status };
+    return { budget, project, spent, percentage, status, budgetAmount, alertThreshold };
   });
 
   return (
@@ -279,8 +281,8 @@ export default function BudgetsPage() {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {budgetsWithProjects.map(({ budget, project, spent, percentage, status }) => (
-            <Card key={budget.id} className={percentage >= budget.alert_threshold ? 'border-yellow-500' : ''}>
+          {budgetsWithProjects.map(({ budget, project, spent, percentage, status, budgetAmount, alertThreshold }) => (
+            <Card key={budget.id} className={percentage >= alertThreshold ? 'border-yellow-500' : ''}>
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <div>
@@ -308,7 +310,7 @@ export default function BudgetsPage() {
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    of {budget.currency} {budget.amount.toFixed(2)} budget
+                    of {budget.currency} {budgetAmount.toFixed(2)} budget
                   </p>
                 </div>
 
@@ -319,17 +321,17 @@ export default function BudgetsPage() {
                   </div>
                   <Progress 
                     value={Math.min(percentage, 100)} 
-                    className={`h-2 ${getProgressColor(percentage, budget.alert_threshold)}`}
+                    className={`h-2 ${getProgressColor(percentage, alertThreshold)}`}
                   />
                 </div>
 
-                {percentage >= budget.alert_threshold && (
+                {percentage >= alertThreshold && (
                   <Alert>
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
                       {percentage >= 100 
                         ? 'Budget exceeded! Review spending immediately.'
-                        : `${budget.alert_threshold}% threshold reached. Monitor spending closely.`
+                        : `${alertThreshold}% threshold reached. Monitor spending closely.`
                       }
                     </AlertDescription>
                   </Alert>
@@ -337,7 +339,7 @@ export default function BudgetsPage() {
 
                 <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
                   <TrendingUp className="w-4 h-4" />
-                  <span>Alert at {budget.alert_threshold}%</span>
+                  <span>Alert at {alertThreshold}%</span>
                 </div>
               </CardContent>
             </Card>

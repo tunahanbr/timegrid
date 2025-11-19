@@ -9,6 +9,7 @@ export interface TimeEntry {
   date: string;
   createdAt: string;
   userId?: string;
+  isBillable?: boolean;
 }
 
 export interface Project {
@@ -263,7 +264,7 @@ export const supabaseStorage = {
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
         duration: entry.duration,
-        is_billable: true,
+        is_billable: entry.isBillable !== undefined ? entry.isBillable : true,
       })
       .select("*")
       .single();

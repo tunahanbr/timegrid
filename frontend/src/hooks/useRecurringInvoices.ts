@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/db/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { getApiUrl } from '@/lib/init';
 
 export interface RecurringInvoice {
   id: string;
   user_id: string;
-  client_id: string;
+  client_id: string | number;
   amount: number;
   currency: string;
   frequency: 'weekly' | 'monthly' | 'quarterly' | 'yearly';
@@ -20,35 +21,42 @@ export interface RecurringInvoice {
 export function useRecurringInvoices() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { getAuthHeaders } = useAuth();
 
   // Fetch recurring invoices
   const { data: recurringInvoices = [], isLoading, error } = useQuery({
     queryKey: ['recurring-invoices'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('recurring_invoices')
-        .select('*, clients(name)')
-        .order('next_run_date', { ascending: true });
-
-      if (error) throw error;
-      return data as RecurringInvoice[];
+      const response = await fetch(`${getApiUrl()}/api/recurring_invoices?order=next_run_date:asc`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to load recurring invoices');
+      }
+      return (result.data || []) as RecurringInvoice[];
     },
   });
 
   // Create recurring invoice
   const createRecurringInvoice = useMutation({
     mutationFn: async (invoice: Omit<RecurringInvoice, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { data, error } = await supabase
-        .from('recurring_invoices')
-        .insert([{ ...invoice, user_id: user.id }])
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data as RecurringInvoice;
+      const response = await fetch(`${getApiUrl()}/api/recurring_invoices`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(invoice),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create recurring invoice');
+      }
+      return (result.data?.[0] || result.data) as RecurringInvoice;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recurring-invoices'] });
@@ -69,15 +77,22 @@ export function useRecurringInvoices() {
   // Update recurring invoice
   const updateRecurringInvoice = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<RecurringInvoice> }) => {
-      const { data, error } = await supabase
-        .from('recurring_invoices')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data as RecurringInvoice;
+      const response = await fetch(`${getApiUrl()}/api/recurring_invoices`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          data: updates,
+          filters: { id },
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update recurring invoice');
+      }
+      return (result.data?.[0] || result.data) as RecurringInvoice;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recurring-invoices'] });
@@ -98,12 +113,18 @@ export function useRecurringInvoices() {
   // Delete recurring invoice
   const deleteRecurringInvoice = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('recurring_invoices')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const response = await fetch(`${getApiUrl()}/api/recurring_invoices`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ id }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete recurring invoice');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recurring-invoices'] });
@@ -124,15 +145,22 @@ export function useRecurringInvoices() {
   // Toggle active status
   const toggleRecurringInvoice = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { data, error } = await supabase
-        .from('recurring_invoices')
-        .update({ is_active })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data as RecurringInvoice;
+      const response = await fetch(`${getApiUrl()}/api/recurring_invoices`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          data: { is_active },
+          filters: { id },
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to toggle recurring invoice');
+      }
+      return (result.data?.[0] || result.data) as RecurringInvoice;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['recurring-invoices'] });

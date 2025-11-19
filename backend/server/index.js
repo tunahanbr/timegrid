@@ -638,6 +638,8 @@ const ALLOWED_TABLES = new Set([
   'expenses',
   'team_members',
   'users',
+  'project_budgets',
+  'recurring_invoices',
 ]);
 
 // Tables that are user-owned and include a `user_id` column
@@ -647,6 +649,10 @@ const TABLES_WITH_USER_ID = new Set([
   'clients',
   'tags',
   'team_members',
+  'expenses',
+  'project_budgets',
+  'recurring_invoices',
+  'invoices',
 ]);
 
 // Basic identifier validation: allow letters, numbers, underscore, dot (for qualified names)

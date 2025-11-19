@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/db/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { getApiUrl } from '@/lib/init';
 
 export interface Invoice {
   id: string;
@@ -33,27 +34,31 @@ export interface InvoiceItem {
 export function useInvoices() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { getAuthHeaders } = useAuth();
 
   // Fetch all invoices
   const { data: invoices = [], isLoading, error } = useQuery({
     queryKey: ['invoices'],
     queryFn: async () => {
-      // Get user from localStorage
-      const storedUser = localStorage.getItem('user');
-      if (!storedUser) {
-        throw new Error('No user found. Please sign in.');
+      const response = await fetch(`${getApiUrl()}/api/invoices`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to load invoices');
       }
-      const user = JSON.parse(storedUser);
-
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('issue_date', { ascending: false })
-        .execute();
-
-      if (error) throw error;
-      return data as Invoice[];
+      // Convert numeric fields from string to number (PostgreSQL NUMERIC returns as string)
+      return (result.data || []).map((inv: any) => ({
+        ...inv,
+        subtotal: typeof inv.subtotal === 'string' ? parseFloat(inv.subtotal) : (inv.subtotal || 0),
+        tax_rate: typeof inv.tax_rate === 'string' ? parseFloat(inv.tax_rate) : (inv.tax_rate || 0),
+        tax_amount: typeof inv.tax_amount === 'string' ? parseFloat(inv.tax_amount) : (inv.tax_amount || 0),
+        total: typeof inv.total === 'string' ? parseFloat(inv.total) : (inv.total || 0),
+        amount: typeof inv.amount === 'string' ? parseFloat(inv.amount) : (inv.amount || inv.total || 0),
+      })) as Invoice[];
     },
     staleTime: 30000,
   });
@@ -61,22 +66,19 @@ export function useInvoices() {
   // Create invoice mutation
   const createInvoice = useMutation({
     mutationFn: async (invoice: Omit<Invoice, 'id' | 'created_at' | 'updated_at'>) => {
-      // Get user from localStorage
-      const storedUser = localStorage.getItem('user');
-      if (!storedUser) {
-        throw new Error('No user found. Please sign in.');
+      const response = await fetch(`${getApiUrl()}/api/invoices`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(invoice),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create invoice');
       }
-      const user = JSON.parse(storedUser);
-
-      const { data, error } = await supabase
-        .from('invoices')
-        .insert([{ ...invoice, user_id: user.id }]);
-
-      if (error) throw error;
-      
-      // Server returns array, get first item
-      const newInvoice = Array.isArray(data) ? data[0] : data;
-      return newInvoice as Invoice;
+      return (result.data?.[0] || result.data) as Invoice;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -97,16 +99,22 @@ export function useInvoices() {
   // Update invoice mutation
   const updateInvoice = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Invoice> }) => {
-      const { data, error } = await supabase
-        .from('invoices')
-        .update(updates)
-        .eq('id', id);
-
-      if (error) throw error;
-      
-      // Server returns array, get first item
-      const updatedInvoice = Array.isArray(data) ? data[0] : data;
-      return updatedInvoice as Invoice;
+      const response = await fetch(`${getApiUrl()}/api/invoices`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          data: updates,
+          filters: { id },
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update invoice');
+      }
+      return (result.data?.[0] || result.data) as Invoice;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -127,12 +135,18 @@ export function useInvoices() {
   // Delete invoice mutation
   const deleteInvoice = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('invoices')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const response = await fetch(`${getApiUrl()}/api/invoices`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ id }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete invoice');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -167,20 +181,23 @@ export function useInvoices() {
 export function useInvoiceItems(invoiceId: string) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { getAuthHeaders } = useAuth();
 
   // Fetch items for an invoice
   const { data: items = [], isLoading, error } = useQuery({
     queryKey: ['invoice-items', invoiceId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('invoice_items')
-        .select('*')
-        .eq('invoice_id', invoiceId)
-        .order('created_at', { ascending: true })
-        .execute();
-
-      if (error) throw error;
-      return data as InvoiceItem[];
+      const response = await fetch(`${getApiUrl()}/api/invoice_items?invoice_id=${invoiceId}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to load invoice items');
+      }
+      return (result.data || []) as InvoiceItem[];
     },
     enabled: !!invoiceId,
     staleTime: 30000,
@@ -189,14 +206,19 @@ export function useInvoiceItems(invoiceId: string) {
   // Create invoice item
   const createItem = useMutation({
     mutationFn: async (item: Omit<InvoiceItem, 'id' | 'created_at'>) => {
-      const { data, error } = await supabase
-        .from('invoice_items')
-        .insert([item]);
-
-      if (error) throw error;
-      
-      const newItem = Array.isArray(data) ? data[0] : data;
-      return newItem as InvoiceItem;
+      const response = await fetch(`${getApiUrl()}/api/invoice_items`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(item),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create invoice item');
+      }
+      return (result.data?.[0] || result.data) as InvoiceItem;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-items', invoiceId] });
@@ -213,12 +235,18 @@ export function useInvoiceItems(invoiceId: string) {
   // Delete invoice item
   const deleteItem = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('invoice_items')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const response = await fetch(`${getApiUrl()}/api/invoice_items`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ id }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete invoice item');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-items', invoiceId] });

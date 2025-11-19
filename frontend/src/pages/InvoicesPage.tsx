@@ -25,8 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { FileText, Plus, Download, Eye, DollarSign, Calendar, Repeat, Edit2, Trash2, Pause, Play } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+// Lazy load PDF libraries to reduce initial bundle size
 import { formatDurationShort } from "@/lib/utils-time";
 import { useClients } from "@/hooks/useClients";
 import { useInvoices, type Invoice } from "@/hooks/useInvoices";
@@ -44,6 +43,19 @@ interface InvoiceItem {
 export default function InvoicesPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [deletingInvoiceId, setDeletingInvoiceId] = useState<string | null>(null);
+  
+  // Invoice form state
+  const [invoiceFormData, setInvoiceFormData] = useState({
+    client_id: '',
+    project_id: '',
+    issue_date: new Date().toISOString().split('T')[0],
+    due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    tax_rate: '0',
+    subtotal: '0',
+    currency: 'USD',
+    notes: '',
+  });
   
   // Recurring invoices state
   const { clients } = useClients();
@@ -76,7 +88,7 @@ export default function InvoicesPage() {
     if (!recurringFormData.client_id || !recurringFormData.amount) return;
 
     const data = {
-      client_id: recurringFormData.client_id,
+      client_id: parseInt(recurringFormData.client_id),
       amount: parseFloat(recurringFormData.amount),
       currency: recurringFormData.currency,
       frequency: recurringFormData.frequency,
@@ -131,7 +143,12 @@ export default function InvoicesPage() {
     return format(nextDate, 'MMM d, yyyy');
   };
 
-  const generatePDF = (invoice: Invoice) => {
+  const generatePDF = async (invoice: Invoice) => {
+    // Lazy load PDF libraries only when needed
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable")
+    ]);
     const doc = new jsPDF();
     
     // Get client name
@@ -252,54 +269,166 @@ export default function InvoicesPage() {
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Client</Label>
-                      <Select>
+                      <Label>Client *</Label>
+                      <Select
+                        value={invoiceFormData.client_id}
+                        onValueChange={(value) => setInvoiceFormData({ ...invoiceFormData, client_id: value })}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select client" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="1">Acme Corp</SelectItem>
-                          <SelectItem value="2">Tech Startup</SelectItem>
+                          {clients.map(client => (
+                            <SelectItem key={client.id} value={client.id.toString()}>
+                              {client.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Project</Label>
-                      <Select>
+                      <Label>Project (Optional)</Label>
+                      <Select
+                        value={invoiceFormData.project_id || "none"}
+                        onValueChange={(value) => setInvoiceFormData({ ...invoiceFormData, project_id: value === "none" ? "" : value })}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select project" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="1">Website Redesign</SelectItem>
-                          <SelectItem value="2">Mobile App</SelectItem>
+                          <SelectItem value="none">No project</SelectItem>
+                          {projects.filter(p => !invoiceFormData.client_id || p.clientId?.toString() === invoiceFormData.client_id).map(project => (
+                            <SelectItem key={project.id} value={project.id.toString()}>
+                              {project.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Issue Date</Label>
-                      <Input type="date" defaultValue={new Date().toISOString().split("T")[0]} />
+                      <Label>Issue Date *</Label>
+                      <Input 
+                        type="date" 
+                        value={invoiceFormData.issue_date}
+                        onChange={(e) => setInvoiceFormData({ ...invoiceFormData, issue_date: e.target.value })}
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label>Due Date</Label>
-                      <Input type="date" />
+                      <Label>Due Date *</Label>
+                      <Input 
+                        type="date" 
+                        value={invoiceFormData.due_date}
+                        onChange={(e) => setInvoiceFormData({ ...invoiceFormData, due_date: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Subtotal (USD) *</Label>
+                      <Input 
+                        type="number" 
+                        step="0.01"
+                        placeholder="0.00"
+                        value={invoiceFormData.subtotal}
+                        onChange={(e) => setInvoiceFormData({ ...invoiceFormData, subtotal: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tax Rate (%)</Label>
+                      <Input 
+                        type="number" 
+                        placeholder="0" 
+                        step="0.1"
+                        value={invoiceFormData.tax_rate}
+                        onChange={(e) => setInvoiceFormData({ ...invoiceFormData, tax_rate: e.target.value })}
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Tax Rate (%)</Label>
-                    <Input type="number" placeholder="0" step="0.1" />
+                    <Label>Currency</Label>
+                    <Select
+                      value={invoiceFormData.currency}
+                      onValueChange={(value) => setInvoiceFormData({ ...invoiceFormData, currency: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD'].map(curr => (
+                          <SelectItem key={curr} value={curr}>{curr}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Notes</Label>
-                    <Textarea placeholder="Payment terms, special instructions, etc." rows={3} />
+                    <Textarea 
+                      placeholder="Payment terms, special instructions, etc." 
+                      rows={3}
+                      value={invoiceFormData.notes}
+                      onChange={(e) => setInvoiceFormData({ ...invoiceFormData, notes: e.target.value })}
+                    />
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
+                  <Button type="button" variant="outline" onClick={() => {
+                    setIsCreateOpen(false);
+                    setInvoiceFormData({
+                      client_id: '',
+                      project_id: '',
+                      issue_date: new Date().toISOString().split('T')[0],
+                      due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                      tax_rate: '0',
+                      subtotal: '0',
+                      currency: 'USD',
+                      notes: '',
+                    });
+                  }}>
                     Cancel
                   </Button>
-                  <Button type="submit">Create Invoice</Button>
+                  <Button 
+                    type="button"
+                    onClick={() => {
+                      if (!invoiceFormData.client_id || !invoiceFormData.issue_date || !invoiceFormData.due_date || !invoiceFormData.subtotal) {
+                        return;
+                      }
+                      const subtotal = parseFloat(invoiceFormData.subtotal);
+                      const taxRate = parseFloat(invoiceFormData.tax_rate) / 100;
+                      const taxAmount = subtotal * taxRate;
+                      const total = subtotal + taxAmount;
+                      const invoiceNumber = `INV-${Date.now()}`;
+                      
+                      createInvoice({
+                        client_id: parseInt(invoiceFormData.client_id),
+                        invoice_number: invoiceNumber,
+                        issue_date: invoiceFormData.issue_date,
+                        due_date: invoiceFormData.due_date,
+                        status: 'draft',
+                        subtotal,
+                        tax_rate: taxRate,
+                        tax_amount: taxAmount,
+                        total,
+                        currency: invoiceFormData.currency,
+                        notes: invoiceFormData.notes || undefined,
+                        amount: total, // Backward compatibility field
+                      });
+                      setIsCreateOpen(false);
+                      setInvoiceFormData({
+                        client_id: '',
+                        project_id: '',
+                        issue_date: new Date().toISOString().split('T')[0],
+                        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                        tax_rate: '0',
+                        subtotal: '0',
+                        currency: 'USD',
+                        notes: '',
+                      });
+                    }}
+                  >
+                    Create Invoice
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -314,7 +443,10 @@ export default function InvoicesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${invoices.reduce((sum, inv) => sum + inv.total, 0).toLocaleString()}
+              ${invoices.reduce((sum, inv) => {
+                const total = typeof inv.total === 'string' ? parseFloat(inv.total) : inv.total || 0;
+                return sum + total;
+              }, 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -393,7 +525,7 @@ export default function InvoicesPage() {
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-right">
-                    <div className="font-semibold">${invoice.total.toLocaleString()}</div>
+                    <div className="font-semibold">${(typeof invoice.total === 'string' ? parseFloat(invoice.total) : invoice.total || 0).toLocaleString()}</div>
                     <div className="text-sm text-muted-foreground">
                       Due {new Date(invoice.due_date).toLocaleDateString()}
                     </div>
@@ -414,6 +546,13 @@ export default function InvoicesPage() {
                     >
                       <Download className="h-4 w-4 mr-1" />
                       PDF
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDeletingInvoiceId(invoice.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -693,17 +832,17 @@ export default function InvoicesPage() {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-medium">${selectedInvoice.subtotal.toFixed(2)}</span>
+                    <span className="font-medium">${(typeof selectedInvoice.subtotal === 'string' ? parseFloat(selectedInvoice.subtotal) : selectedInvoice.subtotal || 0).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      Tax ({(selectedInvoice.tax_rate * 100).toFixed(0)}%)
+                      Tax ({((typeof selectedInvoice.tax_rate === 'string' ? parseFloat(selectedInvoice.tax_rate) : selectedInvoice.tax_rate || 0) * 100).toFixed(0)}%)
                     </span>
-                    <span>${selectedInvoice.tax_amount.toFixed(2)}</span>
+                    <span>${(typeof selectedInvoice.tax_amount === 'string' ? parseFloat(selectedInvoice.tax_amount) : selectedInvoice.tax_amount || 0).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between pt-2 border-t font-bold text-lg">
                     <span>Total</span>
-                    <span>${selectedInvoice.total.toFixed(2)}</span>
+                    <span>${(typeof selectedInvoice.total === 'string' ? parseFloat(selectedInvoice.total) : selectedInvoice.total || 0).toFixed(2)}</span>
                   </div>
                 </div>
 
@@ -746,6 +885,31 @@ export default function InvoicesPage() {
                 if (deletingRecurringId) {
                   deleteRecurringInvoice(deletingRecurringId);
                   setDeletingRecurringId(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deletingInvoiceId} onOpenChange={() => setDeletingInvoiceId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Invoice</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this invoice? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deletingInvoiceId) {
+                  deleteInvoice(deletingInvoiceId);
+                  setDeletingInvoiceId(null);
                 }
               }}
             >

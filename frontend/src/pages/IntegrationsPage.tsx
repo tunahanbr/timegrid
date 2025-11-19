@@ -5,7 +5,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Calendar, MessageSquare, CheckCircle, AlertCircle, ExternalLink, Zap, Github, Trello, Save } from "lucide-react";
+import { Calendar, MessageSquare, CheckCircle, AlertCircle, ExternalLink, Zap, Github, Trello, Save, Workflow, HelpCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 
 interface IntegrationConfig {
@@ -19,7 +20,11 @@ interface IntegrationConfig {
   keyLabel?: string;
 }
 
-const AVAILABLE_INTEGRATIONS: IntegrationConfig[] = [
+interface IntegrationConfigWithHelp extends IntegrationConfig {
+  helpText?: string;
+}
+
+const AVAILABLE_INTEGRATIONS: IntegrationConfigWithHelp[] = [
   {
     id: 'google-calendar',
     name: 'Google Calendar',
@@ -29,6 +34,7 @@ const AVAILABLE_INTEGRATIONS: IntegrationConfig[] = [
     requiresApiKey: true,
     keyPlaceholder: 'Google API Key',
     keyLabel: 'API Key',
+    helpText: 'Automatically create calendar events for your time entries. Perfect for keeping your schedule synchronized and sharing availability with clients.',
   },
   {
     id: 'slack',
@@ -39,6 +45,7 @@ const AVAILABLE_INTEGRATIONS: IntegrationConfig[] = [
     requiresApiKey: true,
     keyPlaceholder: 'xoxb-your-bot-token',
     keyLabel: 'Bot Token',
+    helpText: 'Get real-time notifications in Slack when timers start/stop, invoices are sent, or budgets are exceeded. Great for team visibility and keeping everyone informed.',
   },
   {
     id: 'zapier',
@@ -49,6 +56,18 @@ const AVAILABLE_INTEGRATIONS: IntegrationConfig[] = [
     requiresApiKey: true,
     keyPlaceholder: 'Webhook URL',
     keyLabel: 'Webhook URL',
+    helpText: 'Connect TimeGrid to 5000+ apps like QuickBooks, Stripe, Notion, and more. Automate workflows like creating invoices in accounting software or logging time in project management tools.',
+  },
+  {
+    id: 'n8n',
+    name: 'n8n',
+    description: 'Self-hosted workflow automation with n8n',
+    icon: Workflow,
+    docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/http-request/',
+    requiresApiKey: true,
+    keyPlaceholder: 'n8n Webhook URL',
+    keyLabel: 'Webhook URL',
+    helpText: 'Self-hosted alternative to Zapier. Create custom automation workflows using TimeGrid API. Perfect for teams that want full control over their data and workflows without third-party services.',
   },
   {
     id: 'github',
@@ -59,6 +78,7 @@ const AVAILABLE_INTEGRATIONS: IntegrationConfig[] = [
     requiresApiKey: true,
     keyPlaceholder: 'ghp_xxxxxxxxxxxx',
     keyLabel: 'Personal Access Token',
+    helpText: 'Automatically track time spent on GitHub issues and PRs. Link your time entries to specific code work, making it easy to bill clients for development time and analyze productivity.',
   },
   {
     id: 'trello',
@@ -69,6 +89,7 @@ const AVAILABLE_INTEGRATIONS: IntegrationConfig[] = [
     requiresApiKey: true,
     keyPlaceholder: 'Trello API Key',
     keyLabel: 'API Key',
+    helpText: 'Sync time entries with Trello cards. Track how long you spend on each task and automatically update card descriptions with time spent. Ideal for agile teams using Trello for project management.',
   },
 ];
 
@@ -168,7 +189,21 @@ export default function IntegrationsPage() {
                       <Icon className={`h-5 w-5 ${enabled ? 'text-primary' : 'text-muted-foreground'}`} />
                     </div>
                     <div>
-                      <CardTitle className="text-lg">{integration.name}</CardTitle>
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg">{integration.name}</CardTitle>
+                        {integration.helpText && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs">
+                                <p className="text-sm">{integration.helpText}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
                       <CardDescription className="text-sm mt-1">
                         {integration.description}
                       </CardDescription>

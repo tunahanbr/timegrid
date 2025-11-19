@@ -53,7 +53,7 @@ export default function ExpensesPage() {
     if (!formData.amount || !formData.category) return;
 
     const expenseData = {
-      project_id: formData.project_id || undefined,
+      project_id: formData.project_id ? parseInt(formData.project_id) : undefined,
       amount: parseFloat(formData.amount),
       currency: formData.currency,
       category: formData.category,
@@ -124,8 +124,14 @@ export default function ExpensesPage() {
     return true;
   });
 
-  const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const billableExpenses = filteredExpenses.filter(e => e.is_billable).reduce((sum, e) => sum + e.amount, 0);
+  const totalExpenses = filteredExpenses.reduce((sum, e) => {
+    const amount = typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount;
+    return sum + amount;
+  }, 0);
+  const billableExpenses = filteredExpenses.filter(e => e.is_billable).reduce((sum, e) => {
+    const amount = typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount;
+    return sum + amount;
+  }, 0);
 
   return (
     <div className="p-8">
@@ -220,14 +226,14 @@ export default function ExpensesPage() {
               <div className="space-y-2">
                 <Label htmlFor="project">Project (Optional)</Label>
                 <Select
-                  value={formData.project_id}
-                  onValueChange={(value) => setFormData({ ...formData, project_id: value })}
+                  value={formData.project_id || "none"}
+                  onValueChange={(value) => setFormData({ ...formData, project_id: value === "none" ? "" : value })}
                 >
                   <SelectTrigger id="project">
                     <SelectValue placeholder="No project" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No project</SelectItem>
+                    <SelectItem value="none">No project</SelectItem>
                     {projects.map(project => (
                       <SelectItem key={project.id} value={project.id}>
                         {project.name}
@@ -420,7 +426,7 @@ export default function ExpensesPage() {
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className="text-lg font-bold">
-                          {expense.currency} {expense.amount.toFixed(2)}
+                          {expense.currency} {(typeof expense.amount === 'string' ? parseFloat(expense.amount) : expense.amount).toFixed(2)}
                         </p>
                         {expense.receipt_url && (
                           <a 

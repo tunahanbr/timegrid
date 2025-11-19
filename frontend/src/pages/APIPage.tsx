@@ -109,6 +109,45 @@ export default function APIPage() {
         </AlertDescription>
       </Alert>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Why Use the API?</CardTitle>
+          <CardDescription>Common use cases for API access</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <h4 className="font-semibold mb-2">🤖 Automation & Integrations</h4>
+            <p className="text-sm text-muted-foreground">
+              Connect TimeGrid to other tools like Zapier, n8n, or custom scripts. Automate invoice creation, 
+              sync time entries to project management tools, or build custom reporting dashboards.
+            </p>
+          </div>
+          <div>
+            <h4 className="font-semibold mb-2">📊 Custom Reporting</h4>
+            <p className="text-sm text-muted-foreground">
+              Build custom analytics, export data to Excel/Google Sheets, or create specialized reports 
+              that aren't available in the web interface. Perfect for CFOs and accountants who need 
+              specific data formats.
+            </p>
+          </div>
+          <div>
+            <h4 className="font-semibold mb-2">🔗 Third-Party Integrations</h4>
+            <p className="text-sm text-muted-foreground">
+              Integrate with accounting software (QuickBooks, Xero), payment processors (Stripe), 
+              or project management tools (Jira, Asana). The API allows seamless data flow between 
+              your favorite business tools.
+            </p>
+          </div>
+          <div>
+            <h4 className="font-semibold mb-2">⚡ Bulk Operations</h4>
+            <p className="text-sm text-muted-foreground">
+              Import time entries from other systems, bulk update project rates, or migrate data. 
+              The API makes it easy to perform operations on large datasets programmatically.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <Tabs defaultValue="keys" className="space-y-4">
         <TabsList>
           <TabsTrigger value="keys">API Keys</TabsTrigger>
@@ -228,7 +267,11 @@ export default function APIPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteKey(key.key_id)}
+                          onClick={() => {
+                            if (confirm(`Are you sure you want to delete the API key "${key.name}"? This action cannot be undone.`)) {
+                              handleDeleteKey(key.key_id);
+                            }
+                          }}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>

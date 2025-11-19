@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/db/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { getApiUrl } from '@/lib/init';
 
 export interface Expense {
   id: string;
   user_id: string;
-  project_id?: string;
+  project_id?: string | number;
   amount: number;
   currency: string;
   category: string;
@@ -20,38 +21,52 @@ export interface Expense {
 export function useExpenses(projectId?: string) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { getAuthHeaders } = useAuth();
 
   // Fetch expenses
   const { data: expenses = [], isLoading, error } = useQuery({
     queryKey: ['expenses', projectId],
     queryFn: async () => {
-      let query = supabase.from('expenses').select('*, projects(name)');
-      
+      const url = new URL(`${getApiUrl()}/api/expenses`);
       if (projectId) {
-        query = query.eq('project_id', projectId);
+        url.searchParams.set('project_id', projectId);
       }
-
-      const { data, error } = await query.order('expense_date', { ascending: false });
-
-      if (error) throw error;
-      return data as Expense[];
+      url.searchParams.set('order', 'expense_date:desc');
+      
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to load expenses');
+      }
+      // Convert amount from string to number (PostgreSQL NUMERIC returns as string)
+      return (result.data || []).map((e: any) => ({
+        ...e,
+        amount: typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount,
+      })) as Expense[];
     },
   });
 
   // Create expense
   const createExpense = useMutation({
     mutationFn: async (expense: Omit<Expense, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { data, error } = await supabase
-        .from('expenses')
-        .insert([{ ...expense, user_id: user.id }])
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data as Expense;
+      const response = await fetch(`${getApiUrl()}/api/expenses`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(expense),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create expense');
+      }
+      return (result.data?.[0] || result.data) as Expense;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
@@ -72,15 +87,22 @@ export function useExpenses(projectId?: string) {
   // Update expense
   const updateExpense = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Expense> }) => {
-      const { data, error } = await supabase
-        .from('expenses')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data as Expense;
+      const response = await fetch(`${getApiUrl()}/api/expenses`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          data: updates,
+          filters: { id },
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update expense');
+      }
+      return (result.data?.[0] || result.data) as Expense;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
@@ -101,12 +123,18 @@ export function useExpenses(projectId?: string) {
   // Delete expense
   const deleteExpense = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('expenses')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const response = await fetch(`${getApiUrl()}/api/expenses`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ id }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete expense');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });

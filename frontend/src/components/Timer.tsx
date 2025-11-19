@@ -30,12 +30,14 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { X as XIcon } from "lucide-react";
 import { useTauriEvents } from "@/hooks/useTauriEvents";
+import { Switch } from "@/components/ui/switch";
 
 export function Timer() {
   const [timerState, setTimerState] = useState<TimerState>(storage.getTimerState());
   const [currentTime, setCurrentTime] = useState(0);
   const [description, setDescription] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [isBillable, setIsBillable] = useState(true);
   
   // Manual entry state
   const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
@@ -44,6 +46,7 @@ export function Timer() {
   const [manualHours, setManualHours] = useState("");
   const [manualMinutes, setManualMinutes] = useState("");
   const [manualTags, setManualTags] = useState<string[]>([]);
+  const [manualIsBillable, setManualIsBillable] = useState(true);
   
   // Use Supabase hooks
   const { projects, isLoading: isLoadingProjects } = useProjects();
@@ -138,6 +141,7 @@ export function Timer() {
       tags: selectedTags,
       duration: currentTime,
       date: getTodayISO(),
+      isBillable: isBillable,
     });
 
     const newState: TimerState = {
@@ -197,6 +201,7 @@ export function Timer() {
       tags: manualTags,
       duration: totalSeconds,
       date: getTodayISO(),
+      isBillable: manualIsBillable,
     });
 
     // Reset form
@@ -205,6 +210,7 @@ export function Timer() {
     setManualHours("");
     setManualMinutes("");
     setManualTags([]);
+    setManualIsBillable(true);
     setIsManualDialogOpen(false);
   };
 
@@ -337,6 +343,24 @@ export function Timer() {
           disabled={timerState.isRunning}
           className="w-full"
         />
+
+        {/* Billable toggle */}
+        <div className="flex items-center justify-between p-3 border rounded-lg">
+          <div className="space-y-0.5">
+            <Label htmlFor="billable" className="text-sm font-medium cursor-pointer">
+              Billable
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Mark this time entry as billable to client
+            </p>
+          </div>
+          <Switch
+            id="billable"
+            checked={isBillable}
+            onCheckedChange={setIsBillable}
+            disabled={timerState.isRunning}
+          />
+        </div>
 
         {/* Tags selector */}
         <div className="space-y-2">
@@ -630,6 +654,22 @@ export function Timer() {
                   <p className="text-xs text-muted-foreground">
                     Enter hours and minutes (e.g., 2 hours 30 minutes)
                   </p>
+                </div>
+
+                <div className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="manual-billable" className="text-sm font-medium cursor-pointer">
+                      Billable
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Mark this time entry as billable to client
+                    </p>
+                  </div>
+                  <Switch
+                    id="manual-billable"
+                    checked={manualIsBillable}
+                    onCheckedChange={setManualIsBillable}
+                  />
                 </div>
               </div>
 

@@ -108,6 +108,7 @@ All colors MUST be HSL.
   }
 
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@600&display=swap');
+  /* font-display: swap is already included in the Google Fonts URL above */
 
   * {
     @apply border-border;
