@@ -187,18 +187,30 @@ if (process.env.NODE_ENV === 'production') {
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // Limit each IP to 100 requests per window
-  message: 'Too many requests from this IP, please try again later.',
+  message: { error: 'Too many requests from this IP, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ 
+      error: 'Too many requests from this IP, please try again later.',
+      message: 'Too many requests from this IP, please try again later.'
+    });
+  },
 });
 
 // Rate limiting - Auth endpoints (stricter)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: process.env.NODE_ENV === 'production' ? 5 : 100, // 5 in production, 100 in dev
-  message: 'Too many authentication attempts, please try again later.',
+  message: { error: 'Too many authentication attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ 
+      error: 'Too many authentication attempts, please try again later.',
+      message: 'Too many authentication attempts, please try again later.'
+    });
+  },
 });
 
 // Apply rate limiting

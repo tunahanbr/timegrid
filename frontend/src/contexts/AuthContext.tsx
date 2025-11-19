@@ -133,7 +133,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }),
       });
 
-      const data = await response.json();
+      // Handle rate limiting specifically
+      if (response.status === 429) {
+        let errorMessage = 'Too many requests. Please wait a moment and try again.';
+        try {
+          const text = await response.text();
+          if (text) {
+            const data = JSON.parse(text);
+            errorMessage = data.message || data.error || errorMessage;
+          }
+        } catch {
+          // Use default message if parsing fails
+        }
+        logger.warn('Signin rate limited', { status: response.status });
+        return { error: { message: errorMessage } };
+      }
+
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      let data;
+      
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        logger.error('Signin non-JSON response', { status: response.status, text: text.substring(0, 200) });
+        return { error: { message: `Server error: ${response.status} ${response.statusText}` } };
+      }
+
+      try {
+        const text = await response.text();
+        if (!text || text.trim() === '') {
+          return { error: { message: 'Empty response from server' } };
+        }
+        data = JSON.parse(text);
+      } catch (parseError: any) {
+        logger.error('Signin JSON parse error', { error: parseError, status: response.status });
+        return { error: { message: 'Invalid response from server. Please try again.' } };
+      }
 
       if (!response.ok) {
         return { error: { message: data.error || data.message || `HTTP ${response.status}: ${response.statusText}` } };

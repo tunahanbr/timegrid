@@ -160,26 +160,41 @@ export const supabaseStorage = {
   },
 
   // Time Entries
-  async getEntries(filters?: any): Promise<TimeEntry[]> {
-    // Get user from localStorage
-    const storedUser = localStorage.getItem('user');
-    if (!storedUser) return [];
-    const user = JSON.parse(storedUser);
+  async getEntries(filters?: any, userId?: string): Promise<TimeEntry[]> {
+    // userId should be provided by the hook, but if not, we can't proceed
+    if (!userId) {
+      console.warn('[getEntries] No userId provided, returning empty array');
+      return [];
+    }
+
+    console.log('[getEntries] Fetching entries for user:', userId);
 
     let query = supabase
       .from("time_entries")
       .select("*")  // Simplified - no nested joins for now
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .order("start_time", { ascending: false });
 
     // Note: Date filtering would need server-side support for gte/lte operators
     // For now, we'll fetch all entries and could filter client-side if needed
 
-    const { data, error } = await query;
-    if (error) throw error;
+    console.log('[getEntries] Executing query...');
+    const result = await query;
+    console.log('[getEntries] Query result:', result);
+    
+    const { data, error } = result;
+    
+    if (error) {
+      console.error('[getEntries] Query error:', error);
+      throw error;
+    }
+
+    console.log('[getEntries] Raw data from database:', data);
+    console.log('[getEntries] Number of entries:', data?.length || 0);
 
     // Return early if no entries
     if (!data || data.length === 0) {
+      console.log('[getEntries] No entries found, returning empty array');
       return [];
     }
 
@@ -233,11 +248,12 @@ export const supabaseStorage = {
     return entriesWithTags;
   },
 
-  async addEntry(entry: Omit<TimeEntry, "id" | "createdAt">, userId: string) {
+  async addEntry(entry: Omit<TimeEntry, "id" | "createdAt">, userId: string): Promise<TimeEntry> {
     // Calculate start_time and end_time from date and duration
     const startTime = new Date(entry.date);
     const endTime = new Date(startTime.getTime() + (entry.duration * 1000));
     
+    // Insert and select the full row back
     const response = await supabase
       .from("time_entries")
       .insert({
@@ -248,27 +264,19 @@ export const supabaseStorage = {
         end_time: endTime.toISOString(),
         duration: entry.duration,
         is_billable: true,
-      });
+      })
+      .select("*")
+      .single();
 
     if (response.error) throw new Error(response.error.message);
     
-    const data = response.data?.[0] || response.data;
-    
-    // Get the inserted entry ID - we need to query it back since insert doesn't return it
-    const entryIdResponse = await supabase
-      .from("time_entries")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("project_id", entry.projectId)
-      .eq("start_time", startTime.toISOString())
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
+    const insertedEntry = response.data;
+    if (!insertedEntry) {
+      throw new Error("Failed to create entry");
+    }
 
-    const entryId = entryIdResponse.data?.id;
-
-    // Add tags if we have an entry ID
-    if (entry.tags.length > 0 && entryId) {
+    // Add tags if we have tags
+    if (entry.tags.length > 0 && insertedEntry.id) {
       // Get all existing tags for the user
       const tagsResponse = await supabase
         .from("tags")
@@ -288,22 +296,40 @@ export const supabaseStorage = {
               name: tagName, 
               user_id: userId,
               color: '#' + Math.floor(Math.random()*16777215).toString(16) // Random color
-            });
+            })
+            .select()
+            .single();
           
-          tag = newTagResponse.data?.[0];
+          if (newTagResponse.error) {
+            console.error('[addEntry] Error creating tag:', newTagResponse.error);
+            // Continue without the tag rather than failing the whole entry
+            continue;
+          }
+          
+          tag = newTagResponse.data;
         }
 
         // Link tag to entry
         if (tag) {
           await supabase.from("time_entry_tags").insert({
-            time_entry_id: entryId,
+            time_entry_id: insertedEntry.id,
             tag_id: tag.id,
           });
         }
       }
     }
 
-    return data;
+    // Format and return the entry as TimeEntry
+    return {
+      id: insertedEntry.id,
+      projectId: insertedEntry.project_id,
+      description: insertedEntry.description || "",
+      duration: insertedEntry.duration,
+      date: insertedEntry.start_time || entry.date,
+      tags: entry.tags || [],
+      createdAt: insertedEntry.created_at,
+      userId: insertedEntry.user_id,
+    };
   },
 
   async updateEntry(id: string, updates: Partial<TimeEntry>) {
@@ -354,21 +380,18 @@ export const supabaseStorage = {
     if (error) throw error;
     
     return (data || []).map(c => ({
-      id: c.id,
+      id: c.id.toString(),
       name: c.name,
-      email: c.email,
-      company: c.company,
-      address: c.address,
-      phone: c.phone,
-      notes: c.notes,
+      email: c.email || c.contact_email || undefined,
+      company: c.company || undefined,
+      address: c.address || undefined,
+      phone: c.phone || undefined,
+      notes: c.notes || undefined,
       createdAt: c.created_at,
     }));
   },
 
   async addClient(client: Omit<Client, "id" | "createdAt">, userId: string) {
-    const response = await supabase.auth.getUser();
-    const user = response?.data?.user;
-    
     const { data, error } = await supabase
       .from("clients")
       .insert({
@@ -378,7 +401,7 @@ export const supabaseStorage = {
         address: client.address,
         phone: client.phone,
         notes: client.notes,
-        created_by: user?.id || userId,
+        user_id: userId,
       })
       .select()
       .single();

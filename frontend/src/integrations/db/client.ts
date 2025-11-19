@@ -30,7 +30,69 @@ async function apiCall(endpoint: string, options: RequestInit = {}) {
     }
   }
   
-  return response.json();
+  // Read response text once
+  const text = await response.text();
+  
+  // Handle rate limiting (429) and other error status codes
+  if (response.status === 429) {
+    // Rate limited - try to parse JSON, but if it fails, return a helpful error
+    try {
+      const data = text ? JSON.parse(text) : {};
+      return { 
+        data: null, 
+        error: { 
+          message: data.message || data.error || 'Too many requests. Please wait a moment and try again.' 
+        } 
+      };
+    } catch {
+      return { 
+        data: null, 
+        error: { 
+          message: 'Too many requests. Please wait a moment and try again.' 
+        } 
+      };
+    }
+  }
+  
+  // Check if response is JSON before parsing
+  const contentType = response.headers.get('content-type');
+  if (!contentType || !contentType.includes('application/json')) {
+    // For error status codes, try to provide a helpful message
+    if (response.status >= 400) {
+      const errorMsg = text ? text.substring(0, 200) : response.statusText;
+      console.error('Non-JSON error response:', { status: response.status, statusText: response.statusText, text: errorMsg });
+      return { 
+        data: null, 
+        error: { 
+          message: `Server error (${response.status}): ${errorMsg || response.statusText}` 
+        } 
+      };
+    }
+    console.error('Non-JSON response:', { status: response.status, statusText: response.statusText, text: text.substring(0, 200) });
+    throw new Error(`Server returned non-JSON response (${response.status} ${response.statusText}): ${text.substring(0, 100)}`);
+  }
+  
+  // If response is empty, return empty object
+  if (!text || text.trim() === '') {
+    return { data: null, error: null };
+  }
+  
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    console.error('JSON parse error:', error);
+    console.error('Response text:', text);
+    // For error status codes, return error object instead of throwing
+    if (response.status >= 400) {
+      return { 
+        data: null, 
+        error: { 
+          message: `Invalid response from server (${response.status}): ${text.substring(0, 100)}` 
+        } 
+      };
+    }
+    throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+  }
 }
 
 // Query builder for chaining
@@ -150,15 +212,52 @@ export const supabase = {
       return builder.select(columns);
     },
 
-    insert: async (data: any | any[]) => {
-      try {
-        return await apiCall(`/api/${table}`, {
-          method: 'POST',
-          body: JSON.stringify(data),
-        });
-      } catch (error: any) {
-        return { data: null, error: { message: error.message } };
-      }
+    insert: (data: any | any[]) => {
+      // Return a chainable object that supports .select() and .single()
+      return {
+        select: (columns?: string) => ({
+          single: async () => {
+            try {
+              const result = await apiCall(`/api/${table}`, {
+                method: 'POST',
+                body: JSON.stringify(Array.isArray(data) ? data : [data]),
+              });
+              
+              // If result has data array, return first item
+              if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+                return { ...result, data: result.data[0] };
+              }
+              return result;
+            } catch (error: any) {
+              return { data: null, error: { message: error.message } };
+            }
+          },
+          async then(onfulfilled?: any, onrejected?: any) {
+            try {
+              const result = await apiCall(`/api/${table}`, {
+                method: 'POST',
+                body: JSON.stringify(Array.isArray(data) ? data : [data]),
+              });
+              return onfulfilled ? onfulfilled(result) : result;
+            } catch (error: any) {
+              const errorResult = { data: null, error: { message: error.message } };
+              return onrejected ? onrejected(errorResult) : errorResult;
+            }
+          },
+        }),
+        async then(onfulfilled?: any, onrejected?: any) {
+          try {
+            const result = await apiCall(`/api/${table}`, {
+              method: 'POST',
+              body: JSON.stringify(Array.isArray(data) ? data : [data]),
+            });
+            return onfulfilled ? onfulfilled(result) : result;
+          } catch (error: any) {
+            const errorResult = { data: null, error: { message: error.message } };
+            return onrejected ? onrejected(errorResult) : errorResult;
+          }
+        },
+      };
     },
 
     update: (data: any) => {

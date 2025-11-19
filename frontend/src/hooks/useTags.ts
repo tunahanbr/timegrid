@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/db/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface Tag {
   id: string;
@@ -12,18 +13,16 @@ export interface Tag {
 
 export function useTags() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   // Fetch all tags
   const { data: tags = [], isLoading, error } = useQuery({
-    queryKey: ['tags'],
+    queryKey: ['tags', user?.id],
     queryFn: async () => {
-      // Get user from localStorage
-      const storedUser = localStorage.getItem('user');
-      if (!storedUser) {
+      if (!user?.id) {
         throw new Error('No user found. Please sign in.');
       }
-      const user = JSON.parse(storedUser);
 
       const { data, error } = await supabase
         .from('tags')
@@ -35,28 +34,25 @@ export function useTags() {
       if (error) throw error;
       return data as Tag[];
     },
+    enabled: !!user,
     staleTime: 30000,
   });
 
   // Create tag mutation
   const createTag = useMutation({
     mutationFn: async (tag: { name: string; color: string }) => {
-      // Get user from localStorage
-      const storedUser = localStorage.getItem('user');
-      if (!storedUser) {
+      if (!user?.id) {
         throw new Error('No user found. Please sign in.');
       }
-      const user = JSON.parse(storedUser);
 
       const { data, error } = await supabase
         .from('tags')
-        .insert([{ ...tag, user_id: user.id }]);
+        .insert({ ...tag, user_id: user.id })
+        .select()
+        .single();
 
       if (error) throw error;
-      
-      // Server returns array, get first item
-      const newTag = Array.isArray(data) ? data[0] : data;
-      return newTag as Tag;
+      return data as Tag;
     },
     onMutate: async (newTag) => {
       // Cancel outgoing queries

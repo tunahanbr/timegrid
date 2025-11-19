@@ -17,8 +17,8 @@ export function useTimeEntries(filters?: any) {
         const offlineEntries = await offlineStorage.getOfflineEntries();
         console.log('[useTimeEntries] Loaded offline entries:', offlineEntries);
         
-        // Try to fetch online data
-        const onlineEntries = await supabaseStorage.getEntries(filters);
+        // Try to fetch online data - pass userId explicitly
+        const onlineEntries = await supabaseStorage.getEntries(filters, user?.id);
         console.log('[useTimeEntries] Loaded online entries:', onlineEntries);
         
         // Cache the online data for offline use
@@ -39,7 +39,7 @@ export function useTimeEntries(filters?: any) {
       }
     },
     enabled: !!user,
-    staleTime: 30000, // Consider data fresh for 30 seconds
+    staleTime: 0, // Always refetch when invalidated
     retry: false, // Don't retry on failure when offline
   });
 
@@ -100,14 +100,31 @@ export function useTimeEntries(filters?: any) {
         } catch (error) {
           console.error('[useTimeEntries] Refetch error (expected when offline):', error);
         }
-      } else {
-        // Online entry added - refetch to get fresh data
+      } else if (data) {
+        // Online entry added - optimistically update the cache
         const queryKey = ["time-entries", user?.id, filters];
+        
+        // Optimistically add the new entry to the cache
+        queryClient.setQueryData<TimeEntry[]>(queryKey, (oldEntries = []) => {
+          // Check if entry already exists to avoid duplicates
+          const exists = oldEntries.some(e => e.id === data.id);
+          if (exists) {
+            return oldEntries;
+          }
+          // Add new entry at the beginning (most recent first)
+          return [data, ...oldEntries];
+        });
+        
+        // Invalidate to ensure we get the latest data from server (including tags)
         queryClient.invalidateQueries({ queryKey });
-        queryClient.refetchQueries({ queryKey });
-        if (data !== null) {
-          toast.success("Entry added");
-        }
+        
+        // Force refetch to get complete data
+        queryClient.refetchQueries({ 
+          queryKey,
+          type: 'active' // Only refetch active queries
+        });
+        
+        toast.success("Entry added");
       }
     },
     onError: (error: any) => {
