@@ -53,7 +53,7 @@ echo ""
 echo "3️⃣ Testing protected route without token (should fail)..."
 NO_TOKEN_RESPONSE=$(curl -s -X GET "$API_URL/api/auth/user")
 
-if echo "$NO_TOKEN_RESPONSE" | grep -q "Access token required"; then
+if echo "$NO_TOKEN_RESPONSE" | grep -q "Access token or API key required"; then
   echo "✅ Correctly rejected request without token"
 else
   echo "❌ Should have rejected request without token!"

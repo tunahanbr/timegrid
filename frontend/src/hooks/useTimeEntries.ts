@@ -102,8 +102,9 @@ export function useTimeEntries(filters?: any) {
         }
       } else {
         // Online entry added - refetch to get fresh data
-        queryClient.invalidateQueries({ queryKey: ["time-entries"] });
-        queryClient.refetchQueries({ queryKey: ["time-entries"] });
+        const queryKey = ["time-entries", user?.id, filters];
+        queryClient.invalidateQueries({ queryKey });
+        queryClient.refetchQueries({ queryKey });
         if (data !== null) {
           toast.success("Entry added");
         }
@@ -138,8 +139,8 @@ export function useTimeEntries(filters?: any) {
       return supabaseStorage.updateEntry(id, updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["time-entries"] });
-      queryClient.refetchQueries({ queryKey: ["time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["time-entries", user?.id, filters] });
+      queryClient.refetchQueries({ queryKey: ["time-entries", user?.id, filters] });
       if (navigator.onLine) {
         toast.success("Entry updated");
       }
@@ -177,8 +178,8 @@ export function useTimeEntries(filters?: any) {
       return supabaseStorage.deleteEntry(id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["time-entries"] });
-      queryClient.refetchQueries({ queryKey: ["time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["time-entries", user?.id, filters] });
+      queryClient.refetchQueries({ queryKey: ["time-entries", user?.id, filters] });
       if (navigator.onLine) {
         toast.success("Entry deleted");
       }

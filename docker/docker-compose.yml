@@ -10,7 +10,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./server/migrations:/docker-entrypoint-initdb.d
+      - ../backend/migrations:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U timetrack"]
       interval: 10s
@@ -19,8 +19,8 @@ services:
 
   backend:
     build:
-      context: .
-      dockerfile: server/Dockerfile
+      context: ../backend/server
+      dockerfile: Dockerfile
     container_name: timetrack-backend
     environment:
       # Database connection (matches postgres service)
@@ -41,8 +41,8 @@ services:
 
   frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.frontend
+      context: ../
+      dockerfile: docker/Dockerfile.frontend
       args:
         # Set API base URL for build-time; change to your external API domain
         VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}

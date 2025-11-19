@@ -53,7 +53,7 @@ async function run() {
 
   try {
     await ensureMigrationsTable(client);
-    const migrationsDir = path.resolve('server/migrations');
+    const migrationsDir = path.resolve('migrations');
     const files = fs.readdirSync(migrationsDir)
       .filter(f => f.endsWith('.sql'))
       .sort();
