@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "identifier": "com.timegrid.app",
   "build": {
-    "frontendDist": "../dist",
+    "frontendDist": "../../frontend/dist",
     "devUrl": "http://localhost:8081",
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "(cd ../frontend && npm run dev)",
     "beforeBuildCommand": "npm run build"
   },
   "app": {
