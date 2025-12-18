@@ -113,6 +113,11 @@ export class OfflineSync {
         this.cleanupOfflineData(operation);
         
         logger.debug(`Synced operation: ${operation.type} ${operation.entity}`, { context: 'OfflineSync' });
+        
+        // Add a small delay between operations to avoid rate limiting (100ms)
+        if (this.queue.indexOf(operation) < this.queue.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
       } catch (error) {
         logger.error(`Failed to sync operation: ${operation.type} ${operation.entity}`, error, { context: 'OfflineSync' });
         

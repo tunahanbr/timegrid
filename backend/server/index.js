@@ -188,10 +188,12 @@ if (process.env.NODE_ENV === 'production') {
 // Rate limiting - General API
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per window
+  max: 200, // Limit each IP to 200 requests per window (increased to accommodate sync bursts)
   message: { error: 'Too many requests from this IP, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting in development for localhost
+  skip: (req) => process.env.NODE_ENV !== 'production' && (req.ip === '127.0.0.1' || req.ip === '::1' || req.ip === '::ffff:127.0.0.1'),
   handler: (req, res) => {
     res.status(429).json({ 
       error: 'Too many requests from this IP, please try again later.',
@@ -203,10 +205,12 @@ const apiLimiter = rateLimit({
 // Rate limiting - Auth endpoints (stricter)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 5 : 100, // 5 in production, 100 in dev
+  max: process.env.NODE_ENV === 'production' ? 20 : 100, // 20 in production, 100 in dev (increased from 5)
   message: { error: 'Too many authentication attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting in development for localhost
+  skip: (req) => process.env.NODE_ENV !== 'production' && (req.ip === '127.0.0.1' || req.ip === '::1' || req.ip === '::ffff:127.0.0.1'),
   handler: (req, res) => {
     res.status(429).json({ 
       error: 'Too many authentication attempts, please try again later.',
@@ -632,6 +636,7 @@ function clearCachedSettings(userId) {
 // Whitelist tables exposed via generic CRUD
 const ALLOWED_TABLES = new Set([
   'time_entries',
+  'time_entry_tags',
   'projects',
   'clients',
   'tags',
@@ -731,9 +736,15 @@ app.get('/api/:table', authenticateToken, async (req, res) => {
     
     // Add WHERE clauses for filters (excluding 'order')
     const filterKeys = Object.keys(filters);
+    const whereClauses = [];
+    
+    // SECURITY: Auto-add user_id filter for user-scoped tables
+    if (TABLES_WITH_USER_ID.has(table) && !filterKeys.includes('user_id')) {
+      values.push(req.user.id);
+      whereClauses.push(`user_id = $${values.length}`);
+    }
+    
     if (filterKeys.length > 0) {
-      const whereClauses = [];
-      
       for (const key of filterKeys) {
         // Block unsafe identifiers to prevent SQL injection via column names
         if (!key.endsWith('_in') && !key.endsWith('_is') && !isSafeIdentifier(key)) {
@@ -783,10 +794,11 @@ app.get('/api/:table', authenticateToken, async (req, res) => {
           whereClauses.push(`${key} = $${values.length}`);
         }
       }
-      
-      if (whereClauses.length > 0) {
-        query += ` WHERE ${whereClauses.join(' AND ')}`;
-      }
+    }
+    
+    // Add WHERE clause if we have any conditions
+    if (whereClauses.length > 0) {
+      query += ` WHERE ${whereClauses.join(' AND ')}`;
     }
     
     // Add ORDER BY clause if specified

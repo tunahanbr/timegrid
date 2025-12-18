@@ -20,44 +20,7 @@ export default function DashboardPage() {
   const { tags, isLoading: tagsLoading } = useTags();
   const [timeRange, setTimeRange] = useState<"week" | "month">("week");
 
-  // Loading state
-  if (entriesLoading || projectsLoading || tagsLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-10 w-32" />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-4 w-24" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-32" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
-  }
-
-  // Error state
-  if (entriesError || projectsError) {
-    return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          {entriesError?.message || projectsError?.message || "Failed to load dashboard data"}
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  // Calculate date ranges
+  // Calculate date ranges - MUST be before any conditional returns
   const today = new Date();
   const weekStart = startOfWeek(today, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
@@ -152,20 +115,18 @@ export default function DashboardPage() {
 
   // Tag breakdown data
   const tagData = useMemo(() => {
-    if (!filteredEntries || filteredEntries.length === 0 || !tags || tags.length === 0) {
+    if (!filteredEntries || filteredEntries.length === 0) {
       return [];
     }
     
-    const tagMap = new Map<string, { name: string; time: number; color: string }>();
+    const tagMap = new Map<string, { name: string; time: number }>();
 
     filteredEntries.forEach((entry) => {
       if (entry.tags && entry.tags.length > 0) {
-        entry.tags.forEach((tagId) => {
-          const tag = tags.find((t) => t.id === tagId);
-          if (tag) {
-            const existing = tagMap.get(tag.id) || { name: tag.name, time: 0, color: tag.color || '#888888' };
-            tagMap.set(tag.id, { ...existing, time: existing.time + entry.duration });
-          }
+        // entry.tags is an array of tag names (strings), not IDs
+        entry.tags.forEach((tagName) => {
+          const existing = tagMap.get(tagName) || { name: tagName, time: 0 };
+          tagMap.set(tagName, { ...existing, time: existing.time + entry.duration });
         });
       }
     });
@@ -179,7 +140,7 @@ export default function DashboardPage() {
       }))
       .sort((a, b) => b.time - a.time)
       .slice(0, 8);
-  }, [filteredEntries, tags, totalTime]);
+  }, [filteredEntries, totalTime]);
 
   // Day of week breakdown
   const dayOfWeekData = useMemo(() => {
@@ -247,6 +208,47 @@ export default function DashboardPage() {
       uniqueProjects,
     };
   }, [filteredEntries, totalTime]);
+
+  // Loading state - MUST be after all hooks
+  if (entriesLoading || projectsLoading || tagsLoading) {
+    return (
+      <div className="container mx-auto px-8 py-8">
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-10 w-32" />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-4 w-24" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-32" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Skeleton className="h-96 w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  // Error state - MUST be after all hooks
+  if (entriesError || projectsError) {
+    return (
+      <div className="container mx-auto px-8 py-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {entriesError?.message || projectsError?.message || "Failed to load dashboard data"}
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-8 py-8">

@@ -10,7 +10,7 @@ interface TagBreakdownProps {
 
 export function TagBreakdownChart({ data }: TagBreakdownProps) {
   const sorted = useMemo(() => {
-    return [...data].sort((a, b) => b.hours - a.hours).slice(0, 15);
+    return [...data].sort((a, b) => b.hours - a.hours).slice(0, 8);
   }, [data]);
 
   if (!sorted.length) {
@@ -26,47 +26,23 @@ export function TagBreakdownChart({ data }: TagBreakdownProps) {
   return (
     <div className="space-y-3">
       {sorted.map((tag, index) => {
-        const percentage = (tag.hours / maxHours) * 100;
-        const hue = (index * 360) / sorted.length;
+        const percentage = maxHours > 0 ? (tag.hours / maxHours) * 100 : 0;
         
         return (
-          <div key={index} className="space-y-1">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <span className="inline-block px-2 py-1 rounded-full text-xs font-medium text-white"
-                  style={{ 
-                    backgroundColor: `hsl(${hue}, 70%, 50%)`,
-                  }}
-                >
-                  {tag.name}
-                </span>
-                <span className="text-sm text-muted-foreground ml-auto">{tag.hours.toFixed(1)}h</span>
-              </div>
-            </div>
-            
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
+          <div key={index} className="flex items-center gap-3">
+            <span className="text-sm font-medium w-32 truncate">{tag.name}</span>
+            <div className="flex-1 h-6 bg-muted rounded-sm overflow-hidden">
               <div
-                className="h-full rounded-full transition-all"
-                style={{
-                  width: `${percentage}%`,
-                  backgroundColor: `hsl(${hue}, 70%, 50%)`,
-                  opacity: 0.7,
-                }}
+                className="h-full bg-primary transition-all"
+                style={{ width: `${Math.max(percentage, 2)}%` }}
               />
             </div>
-            
-            <div className="text-xs text-muted-foreground">
-              {tag.percentage}% of total time
-            </div>
+            <span className="text-sm text-muted-foreground w-16 text-right tabular-nums">
+              {tag.hours.toFixed(1)}h
+            </span>
           </div>
         );
       })}
-
-      {data.length > sorted.length && (
-        <div className="p-3 bg-muted/50 rounded text-xs text-muted-foreground">
-          +{data.length - sorted.length} more tags (showing top 15)
-        </div>
-      )}
     </div>
   );
 }
