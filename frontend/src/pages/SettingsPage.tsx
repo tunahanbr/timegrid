@@ -113,7 +113,7 @@ export default function SettingsPage() {
         clients: false,
         invoicing: false,
         tags: true,
-        reports: true,
+        reports: false,
         team: false,
         budgets: false,
         expenses: false,
@@ -250,12 +250,11 @@ export default function SettingsPage() {
               </div>
 
               <div
-                className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                className={`border-2 rounded-lg p-4 cursor-not-allowed transition-all opacity-50 ${
                   userMode === 'freelancer'
                     ? 'border-primary bg-primary/5 shadow-sm'
-                    : 'border-border hover:border-primary/50 hover:bg-accent/50'
+                    : 'border-border'
                 }`}
-                onClick={() => applyMode('freelancer')}
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -277,12 +276,11 @@ export default function SettingsPage() {
               </div>
 
               <div
-                className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                className={`border-2 rounded-lg p-4 cursor-not-allowed transition-all opacity-50 ${
                   userMode === 'team'
                     ? 'border-primary bg-primary/5 shadow-sm'
-                    : 'border-border hover:border-primary/50 hover:bg-accent/50'
+                    : 'border-border'
                 }`}
-                onClick={() => applyMode('team')}
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -312,162 +310,166 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="feature-clients" className="font-medium">Clients Management</Label>
-                <p className="text-sm text-muted-foreground">
-                  Create and manage client information, link projects to clients
-                </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Clients Management */}
+              <div className="flex items-start space-x-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                <Switch
+                  id="feature-clients"
+                  checked={features.clients}
+                  onCheckedChange={(checked) => updateFeature('clients', checked)}
+                  className="mt-1"
+                />
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="feature-clients" className="font-medium cursor-pointer">Clients Management</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Create and manage client information, link projects to clients
+                  </p>
+                </div>
               </div>
-              <Switch
-                id="feature-clients"
-                checked={features.clients}
-                onCheckedChange={(checked) => updateFeature('clients', checked)}
-              />
-            </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="feature-invoicing" className="font-medium">Invoicing</Label>
-                <p className="text-sm text-muted-foreground">
-                  Generate and manage invoices based on tracked time
-                </p>
+              {/* Invoicing */}
+              <div className="flex items-start space-x-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                <Switch
+                  id="feature-invoicing"
+                  checked={features.invoicing}
+                  onCheckedChange={(checked) => updateFeature('invoicing', checked)}
+                  className="mt-1"
+                />
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="feature-invoicing" className="font-medium cursor-pointer">Invoicing</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Generate and manage invoices based on tracked time
+                  </p>
+                </div>
               </div>
-              <Switch
-                id="feature-invoicing"
-                checked={features.invoicing}
-                onCheckedChange={(checked) => updateFeature('invoicing', checked)}
-              />
-            </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="feature-tags" className="font-medium">Tags</Label>
-                <p className="text-sm text-muted-foreground">
-                  Categorize time entries with custom tags
-                </p>
+              {/* Tags */}
+              <div className="flex items-start space-x-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                <Switch
+                  id="feature-tags"
+                  checked={features.tags}
+                  onCheckedChange={(checked) => updateFeature('tags', checked)}
+                  className="mt-1"
+                />
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="feature-tags" className="font-medium cursor-pointer">Tags</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Categorize time entries with custom tags
+                  </p>
+                </div>
               </div>
-              <Switch
-                id="feature-tags"
-                checked={features.tags}
-                onCheckedChange={(checked) => updateFeature('tags', checked)}
-              />
-            </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="feature-reports" className="font-medium">Reports & Analytics</Label>
-                <p className="text-sm text-muted-foreground">
-                  View time breakdowns, charts, and export data
-                </p>
+              {/* Reports & Analytics */}
+              <div className="flex items-start space-x-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                <Switch
+                  id="feature-reports"
+                  checked={features.reports}
+                  onCheckedChange={(checked) => updateFeature('reports', checked)}
+                  className="mt-1"
+                />
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="feature-reports" className="font-medium cursor-pointer">Reports & Analytics</Label>
+                  <p className="text-sm text-muted-foreground">
+                    View time breakdowns, charts, and export data
+                  </p>
+                </div>
               </div>
-              <Switch
-                id="feature-reports"
-                checked={features.reports}
-                onCheckedChange={(checked) => updateFeature('reports', checked)}
-              />
-            </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="feature-budgets" className="font-medium">Budget Tracking</Label>
-                <p className="text-sm text-muted-foreground">
-                  Set project budgets, track spending, and receive alerts
-                </p>
+              {/* Budget Tracking */}
+              <div className="flex items-start space-x-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                <Switch
+                  id="feature-budgets"
+                  checked={features.budgets}
+                  onCheckedChange={(checked) => updateFeature('budgets', checked)}
+                  className="mt-1"
+                />
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="feature-budgets" className="font-medium cursor-pointer">Budget Tracking</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Set project budgets, track spending, and receive alerts
+                  </p>
+                </div>
               </div>
-              <Switch
-                id="feature-budgets"
-                checked={features.budgets}
-                onCheckedChange={(checked) => updateFeature('budgets', checked)}
-              />
-            </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="feature-expenses" className="font-medium">Expense Management</Label>
-                <p className="text-sm text-muted-foreground">
-                  Track project expenses, attach receipts, and manage billable costs
-                </p>
+              {/* Expense Management */}
+              <div className="flex items-start space-x-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                <Switch
+                  id="feature-expenses"
+                  checked={features.expenses}
+                  onCheckedChange={(checked) => updateFeature('expenses', checked)}
+                  className="mt-1"
+                />
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="feature-expenses" className="font-medium cursor-pointer">Expense Management</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Track project expenses, attach receipts, and manage billable costs
+                  </p>
+                </div>
               </div>
-              <Switch
-                id="feature-expenses"
-                checked={features.expenses}
-                onCheckedChange={(checked) => updateFeature('expenses', checked)}
-              />
-            </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="feature-team" className="font-medium">Team Collaboration</Label>
-                <p className="text-sm text-muted-foreground">
-                  Manage team members, share projects, view team activity
-                </p>
+              {/* Team Collaboration */}
+              <div className="flex items-start space-x-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                <Switch
+                  id="feature-team"
+                  checked={features.team}
+                  onCheckedChange={(checked) => updateFeature('team', checked)}
+                  className="mt-1"
+                />
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="feature-team" className="font-medium cursor-pointer">Team Collaboration</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Manage team members, share projects, view team activity
+                  </p>
+                </div>
               </div>
-              <Switch
-                id="feature-team"
-                checked={features.team}
-                onCheckedChange={(checked) => updateFeature('team', checked)}
-              />
-            </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="feature-api-keys" className="font-medium">API Keys</Label>
-                <p className="text-sm text-muted-foreground">
-                  Generate API keys for external integrations and automation
-                </p>
+              {/* API Keys */}
+              <div className="flex items-start space-x-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                <Switch
+                  id="feature-api-keys"
+                  checked={features.apiKeys}
+                  onCheckedChange={(checked) => updateFeature('apiKeys', checked)}
+                  className="mt-1"
+                />
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="feature-api-keys" className="font-medium cursor-pointer">API Keys</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Generate API keys for external integrations and automation
+                  </p>
+                </div>
               </div>
-              <Switch
-                id="feature-api-keys"
-                checked={features.apiKeys}
-                onCheckedChange={(checked) => updateFeature('apiKeys', checked)}
-              />
-            </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="feature-import" className="font-medium">Data Import</Label>
-                <p className="text-sm text-muted-foreground">
-                  Import time entries and projects from CSV or other time tracking tools
-                </p>
+              {/* Data Import */}
+              <div className="flex items-start space-x-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                <Switch
+                  id="feature-import"
+                  checked={features.import}
+                  onCheckedChange={(checked) => updateFeature('import', checked)}
+                  className="mt-1"
+                />
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="feature-import" className="font-medium cursor-pointer">Data Import</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Import time entries and projects from CSV or other time tracking tools
+                  </p>
+                </div>
               </div>
-              <Switch
-                id="feature-import"
-                checked={features.import}
-                onCheckedChange={(checked) => updateFeature('import', checked)}
-              />
-            </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="feature-integrations" className="font-medium">Integrations</Label>
-                <p className="text-sm text-muted-foreground">
-                  Connect with external services like Slack, Zapier, and webhooks
-                </p>
+              {/* Integrations */}
+              <div className="flex items-start space-x-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                <Switch
+                  id="feature-integrations"
+                  checked={features.integrations}
+                  onCheckedChange={(checked) => updateFeature('integrations', checked)}
+                  className="mt-1"
+                />
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="feature-integrations" className="font-medium cursor-pointer">Integrations</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Connect with external services like Slack, Zapier, and webhooks
+                  </p>
+                </div>
               </div>
-              <Switch
-                id="feature-integrations"
-                checked={features.integrations}
-                onCheckedChange={(checked) => updateFeature('integrations', checked)}
-              />
             </div>
           </CardContent>
         </Card>

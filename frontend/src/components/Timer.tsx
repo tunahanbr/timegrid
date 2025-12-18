@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { X as XIcon } from "lucide-react";
 import { useTauriEvents } from "@/hooks/useTauriEvents";
 import { Switch } from "@/components/ui/switch";
+import { useUserSettings } from "@/hooks/useUserSettings";
 
 export function Timer() {
   const [timerState, setTimerState] = useState<TimerState>(storage.getTimerState());
@@ -52,6 +53,7 @@ export function Timer() {
   const { projects, isLoading: isLoadingProjects } = useProjects();
   const { tags, isLoading: isLoadingTags } = useTags();
   const { addEntry, isAdding } = useTimeEntries();
+  const { settings } = useUserSettings();
   const isMobile = useIsMobile();
 
   // Menu bar updates centralized via tray-updater service; no direct invokes here
@@ -345,22 +347,24 @@ export function Timer() {
         />
 
         {/* Billable toggle */}
-        <div className="flex items-center justify-between p-3 border rounded-lg">
-          <div className="space-y-0.5">
-            <Label htmlFor="billable" className="text-sm font-medium cursor-pointer">
-              Billable
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              Mark this time entry as billable to client
-            </p>
+        {(settings.userMode === 'freelancer' || settings.userMode === 'team') && (
+          <div className="flex items-center justify-between p-3 border rounded-lg">
+            <div className="space-y-0.5">
+              <Label htmlFor="billable" className="text-sm font-medium cursor-pointer">
+                Billable
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Mark this time entry as billable to client
+              </p>
+            </div>
+            <Switch
+              id="billable"
+              checked={isBillable}
+              onCheckedChange={setIsBillable}
+              disabled={timerState.isRunning}
+            />
           </div>
-          <Switch
-            id="billable"
-            checked={isBillable}
-            onCheckedChange={setIsBillable}
-            disabled={timerState.isRunning}
-          />
-        </div>
+        )}
 
         {/* Tags selector */}
         <div className="space-y-2">
@@ -656,21 +660,23 @@ export function Timer() {
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="manual-billable" className="text-sm font-medium cursor-pointer">
-                      Billable
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Mark this time entry as billable to client
-                    </p>
+                {(settings.userMode === 'freelancer' || settings.userMode === 'team') && (
+                  <div className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="manual-billable" className="text-sm font-medium cursor-pointer">
+                        Billable
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Mark this time entry as billable to client
+                      </p>
+                    </div>
+                    <Switch
+                      id="manual-billable"
+                      checked={manualIsBillable}
+                      onCheckedChange={setManualIsBillable}
+                    />
                   </div>
-                  <Switch
-                    id="manual-billable"
-                    checked={manualIsBillable}
-                    onCheckedChange={setManualIsBillable}
-                  />
-                </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-2" role="group" aria-label="Manual entry form actions">

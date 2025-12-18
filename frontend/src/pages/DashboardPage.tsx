@@ -1,37 +1,27 @@
 import { useMemo } from "react";
 import { useTimeEntries } from "@/hooks/useTimeEntries";
 import { useProjects } from "@/hooks/useProjects";
+import { useTags } from "@/hooks/useTags";
 import { formatDurationShort } from "@/lib/utils-time";
-import {
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
+import { TimelineChart } from "@/components/charts/TimelineChart";
+import { ProjectDistributionChart } from "@/components/charts/ProjectDistributionChart";
+import { TagBreakdownChart } from "@/components/charts/TagBreakdownChart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Calendar, Clock, TrendingUp, Folder, AlertCircle } from "lucide-react";
-import { format, subDays, startOfWeek, endOfWeek, eachDayOfInterval, parseISO } from "date-fns";
+import { Calendar, Clock, TrendingUp, Folder, AlertCircle, Hash, Zap } from "lucide-react";
+import { format, subDays, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, formatISO, isWithinInterval, getDay } from "date-fns";
 import { useState } from "react";
 
 export default function DashboardPage() {
   const { entries, isLoading: entriesLoading, error: entriesError } = useTimeEntries();
   const { projects, isLoading: projectsLoading, error: projectsError } = useProjects();
+  const { tags, isLoading: tagsLoading } = useTags();
   const [timeRange, setTimeRange] = useState<"week" | "month">("week");
 
   // Loading state
-  if (entriesLoading || projectsLoading) {
+  if (entriesLoading || projectsLoading || tagsLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -78,8 +68,14 @@ export default function DashboardPage() {
     if (!entries || entries.length === 0) return [];
     const startDate = timeRange === "week" ? weekStart : monthStart;
     return entries.filter((entry) => {
-      const entryDate = parseISO(entry.date);
-      return entryDate >= startDate && entryDate <= today;
+      try {
+        // Parse the date field which is now a full timestamp (start_time)
+        const entryDate = parseISO(entry.date);
+        return isWithinInterval(entryDate, { start: startDate, end: today });
+      } catch (e) {
+        console.warn('Failed to parse entry date:', entry.date);
+        return false;
+      }
     });
   }, [entries, timeRange, weekStart, monthStart, today]);
 
@@ -127,9 +123,23 @@ export default function DashboardPage() {
       }));
     }
 
+    // Group entries by day for faster lookup
+    const entriesByDay = new Map<string, typeof filteredEntries>();
+    filteredEntries.forEach((entry) => {
+      try {
+        const dayStr = format(parseISO(entry.date), "yyyy-MM-dd");
+        if (!entriesByDay.has(dayStr)) {
+          entriesByDay.set(dayStr, []);
+        }
+        entriesByDay.get(dayStr)!.push(entry);
+      } catch (e) {
+        console.warn('Failed to group entry by day:', entry.date);
+      }
+    });
+
     return days.map((day) => {
       const dayStr = format(day, "yyyy-MM-dd");
-      const dayEntries = filteredEntries.filter((e) => e.date === dayStr);
+      const dayEntries = entriesByDay.get(dayStr) || [];
       const dayTotal = dayEntries.reduce((sum, e) => sum + e.duration, 0);
 
       return {
@@ -139,6 +149,81 @@ export default function DashboardPage() {
       };
     });
   }, [filteredEntries, timeRange, weekStart, monthStart, today]);
+
+  // Tag breakdown data
+  const tagData = useMemo(() => {
+    if (!filteredEntries || filteredEntries.length === 0 || !tags || tags.length === 0) {
+      return [];
+    }
+    
+    const tagMap = new Map<string, { name: string; time: number; color: string }>();
+
+    filteredEntries.forEach((entry) => {
+      if (entry.tags && entry.tags.length > 0) {
+        entry.tags.forEach((tagId) => {
+          const tag = tags.find((t) => t.id === tagId);
+          if (tag) {
+            const existing = tagMap.get(tag.id) || { name: tag.name, time: 0, color: tag.color || '#888888' };
+            tagMap.set(tag.id, { ...existing, time: existing.time + entry.duration });
+          }
+        });
+      }
+    });
+
+    return Array.from(tagMap.values())
+      .map((item) => ({
+        name: item.name,
+        hours: Math.round((item.time / 3600) * 10) / 10,
+        percentage: totalTime > 0 ? Math.round((item.time / totalTime) * 100) : 0,
+        time: item.time,
+      }))
+      .sort((a, b) => b.time - a.time)
+      .slice(0, 8);
+  }, [filteredEntries, tags, totalTime]);
+
+  // Day of week breakdown
+  const dayOfWeekData = useMemo(() => {
+    if (!filteredEntries || filteredEntries.length === 0) {
+      return [];
+    }
+
+    const dayMap = new Map<number, number>();
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    filteredEntries.forEach((entry) => {
+      try {
+        const dayOfWeek = getDay(parseISO(entry.date));
+        dayMap.set(dayOfWeek, (dayMap.get(dayOfWeek) || 0) + entry.duration);
+      } catch (e) {
+        console.warn('Failed to parse entry date for day of week:', entry.date);
+      }
+    });
+
+    return dayNames.map((name, index) => ({
+      name,
+      hours: Math.round(((dayMap.get(index) || 0) / 3600) * 10) / 10,
+      time: dayMap.get(index) || 0,
+    })).filter(d => d.hours > 0);
+  }, [filteredEntries]);
+
+  // Recent/longest entries
+  const recentEntries = useMemo(() => {
+    if (!filteredEntries || filteredEntries.length === 0 || !projects) {
+      return [];
+    }
+
+    return [...filteredEntries]
+      .sort((a, b) => b.duration - a.duration)
+      .slice(0, 5)
+      .map((entry) => {
+        const project = projects.find((p) => p.id === entry.projectId);
+        return {
+          ...entry,
+          projectName: project?.name || 'Unknown',
+          projectColor: project?.color || '#888888',
+        };
+      });
+  }, [filteredEntries, projects]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -162,20 +247,6 @@ export default function DashboardPage() {
       uniqueProjects,
     };
   }, [filteredEntries, totalTime]);
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-background border border-border p-3 rounded-md shadow-lg">
-          <p className="font-medium">{payload[0].payload.name || payload[0].payload.date}</p>
-          <p className="text-sm text-muted-foreground">
-            {formatDurationShort(payload[0].payload.seconds || payload[0].payload.time)}
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="container mx-auto px-8 py-8">
@@ -248,21 +319,14 @@ export default function DashboardPage() {
             <CardDescription>Daily time tracked over {timeRange === "week" ? "this week" : "the last 30 days"}</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={dailyData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="date" className="text-xs" />
-                <YAxis className="text-xs" label={{ value: "Hours", angle: -90, position: "insideLeft" }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Line
-                  type="monotone"
-                  dataKey="hours"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  dot={{ fill: "hsl(var(--primary))" }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <TimelineChart 
+              data={dailyData.map((d) => ({
+                date: d.date,
+                hours: d.hours,
+                billableHours: 0,
+                revenue: 0,
+              }))}
+            />
           </CardContent>
         </Card>
 
@@ -273,58 +337,111 @@ export default function DashboardPage() {
             <CardDescription>Time breakdown by project</CardDescription>
           </CardHeader>
           <CardContent>
-            {projectData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={projectData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry) => `${entry.name} (${entry.hours}h)`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="hours"
-                  >
-                    {projectData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                No project data available
+            <ProjectDistributionChart 
+              data={projectData.map((p) => ({
+                name: p.name,
+                hours: p.hours,
+                percentage: totalTime > 0 ? Math.round((p.time / totalTime) * 100) : 0,
+                color: p.color,
+              }))}
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Day of Week Activity */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Activity by Day of Week
+            </CardTitle>
+            <CardDescription>Your most productive days</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {dayOfWeekData.length > 0 ? (
+              <div className="space-y-3">
+                {dayOfWeekData.map((day) => {
+                  const maxHours = Math.max(...dayOfWeekData.map((d) => d.hours));
+                  const percentage = maxHours > 0 ? (day.hours / maxHours) * 100 : 0;
+                  return (
+                    <div key={day.name} className="flex items-center gap-3">
+                      <span className="text-sm font-medium w-12">{day.name}</span>
+                      <div className="flex-1 h-6 bg-muted rounded-sm overflow-hidden">
+                        <div
+                          className="h-full bg-primary transition-all"
+                          style={{ width: `${Math.max(percentage, 2)}%` }}
+                        />
+                      </div>
+                      <span className="text-sm text-muted-foreground w-16 text-right tabular-nums">
+                        {day.hours.toFixed(1)}h
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">No activity data</div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Tag Breakdown */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Hash className="h-5 w-5" />
+              Top Tags
+            </CardTitle>
+            <CardDescription>Most used tags this period</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {tagData.length > 0 ? (
+              <TagBreakdownChart data={tagData} />
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">No tags used</div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Project Breakdown Table */}
-      <Card>
+      {/* Longest Sessions */}
+      <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Project Breakdown</CardTitle>
-          <CardDescription>Detailed time by project</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5" />
+            Longest Sessions
+          </CardTitle>
+          <CardDescription>Your most focused work periods this {timeRange === "week" ? "week" : "month"}</CardDescription>
         </CardHeader>
         <CardContent>
-          {projectData.length > 0 ? (
-            <div className="space-y-2">
-              {projectData.map((project, index) => (
-                <div key={index} className="flex items-center gap-4 p-3 rounded hover:bg-muted/50 transition-colors">
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }} />
-                  <div className="flex-1 font-medium">{project.name}</div>
-                  <div className="text-sm text-muted-foreground">{project.hours} hours</div>
-                  <div className="font-mono font-semibold">{formatDurationShort(project.time)}</div>
-                  <div className="text-sm text-muted-foreground w-16 text-right">
-                    {Math.round((project.time / totalTime) * 100)}%
+          {recentEntries.length > 0 ? (
+            <div className="space-y-3">
+              {recentEntries.map((entry, index) => (
+                <div key={entry.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                    {index + 1}
+                  </div>
+                  <div
+                    className="w-1 h-8 rounded-full"
+                    style={{ backgroundColor: entry.projectColor }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{entry.description || 'No description'}</p>
+                    <p className="text-sm text-muted-foreground truncate">{entry.projectName}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-mono font-semibold">{formatDurationShort(entry.duration)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {format(parseISO(entry.date), 'MMM d')}
+                    </p>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">No data available</div>
+            <div className="text-center py-8 text-muted-foreground">No entries found</div>
           )}
         </CardContent>
       </Card>

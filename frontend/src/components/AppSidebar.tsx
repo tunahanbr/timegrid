@@ -31,7 +31,7 @@ export function AppSidebar() {
 
   const navigation = [
     { name: "Timer", href: "/", icon: Timer, enabled: true },
-    { name: "Dashboard", href: "/dashboard", icon: BarChart3, enabled: features.reports },
+    { name: "Dashboard", href: "/dashboard", icon: BarChart3, enabled: true },
     { name: "Reports", href: "/reports", icon: TrendingUp, enabled: features.reports },
     { name: "Entries", href: "/entries", icon: List, enabled: true },
   ];

@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { formatDurationShort, formatDate } from "@/lib/utils-time";
-import { Trash2, Loader2, AlertCircle, Calendar, Download, CheckSquare, Square, Edit3, X, CloudOff } from "lucide-react";
+import { Trash2, Loader2, AlertCircle, Calendar, Download, CheckSquare, Square, Edit3, X, CloudOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,7 +31,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { FilterBar, FilterState } from "@/components/FilterBar";
-import { parseISO } from "date-fns";
+import { parseISO, isWithinInterval } from "date-fns";
 import { useTimeEntries } from "@/hooks/useTimeEntries";
 import { useProjects } from "@/hooks/useProjects";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -44,6 +44,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function EntriesPage() {
   const isMobile = useIsMobile();
+  const ITEMS_PER_PAGE = 50;
+  const [currentPage, setCurrentPage] = useState(1);
+  
   const [filters, setFilters] = useState<FilterState>({
     dateRange: { from: undefined, to: undefined },
     projectIds: [],
@@ -80,27 +83,51 @@ export default function EntriesPage() {
   // Filter entries
   const filteredEntries = useMemo(() => {
     return entries.filter((entry) => {
-      // Date range filter
-      if (filters.dateRange.from || filters.dateRange.to) {
-        const entryDate = parseISO(entry.date);
-        if (filters.dateRange.from && entryDate < filters.dateRange.from) return false;
-        if (filters.dateRange.to && entryDate > filters.dateRange.to) return false;
-      }
+      try {
+        // Date range filter
+        if (filters.dateRange.from || filters.dateRange.to) {
+          const entryDate = parseISO(entry.date);
+          if (filters.dateRange.from && filters.dateRange.to) {
+            if (!isWithinInterval(entryDate, { start: filters.dateRange.from, end: filters.dateRange.to })) {
+              return false;
+            }
+          } else if (filters.dateRange.from && entryDate < filters.dateRange.from) {
+            return false;
+          } else if (filters.dateRange.to && entryDate > filters.dateRange.to) {
+            return false;
+          }
+        }
 
-      // Project filter
-      if (filters.projectIds.length > 0 && !filters.projectIds.includes(entry.projectId)) {
+        // Project filter
+        if (filters.projectIds.length > 0 && !filters.projectIds.includes(entry.projectId)) {
+          return false;
+        }
+
+        // Tag filter
+        if (filters.tags.length > 0) {
+          const hasMatchingTag = filters.tags.some((tag) => entry.tags.includes(tag));
+          if (!hasMatchingTag) return false;
+        }
+
+        return true;
+      } catch (e) {
+        console.warn('Failed to filter entry:', entry.date);
         return false;
       }
-
-      // Tag filter
-      if (filters.tags.length > 0) {
-        const hasMatchingTag = filters.tags.some((tag) => entry.tags.includes(tag));
-        if (!hasMatchingTag) return false;
-      }
-
-      return true;
     });
   }, [entries, filters]);
+  
+  // Paginated entries
+  const paginatedEntries = useMemo(() => {
+    const sorted = [...filteredEntries].sort((a, b) => {
+      // Sort by date descending
+      return b.date.localeCompare(a.date);
+    });
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return sorted.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredEntries, currentPage]);
+  
+  const totalPages = Math.ceil(filteredEntries.length / ITEMS_PER_PAGE);
 
   // Export to CSV
   const exportToCSV = () => {
@@ -184,7 +211,7 @@ export default function EntriesPage() {
     setEditTags([]);
   };
 
-  const groupedEntries = filteredEntries.reduce((acc, entry) => {
+  const groupedEntries = paginatedEntries.reduce((acc, entry) => {
     if (!acc[entry.date]) {
       acc[entry.date] = [];
     }
@@ -449,6 +476,52 @@ export default function EntriesPage() {
           </div>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {filteredEntries.length > ITEMS_PER_PAGE && (
+        <div className="mt-8 flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredEntries.length)} of {filteredEntries.length} entries
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(page => Math.abs(page - currentPage) <= 1 || page === 1 || page === totalPages)
+                .map((page, index, arr) => {
+                  const showDots = index > 0 && arr[index - 1] !== page - 1;
+                  return (
+                    <div key={page}>
+                      {showDots && <span className="px-1 text-muted-foreground">...</span>}
+                      <Button
+                        variant={page === currentPage ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                      >
+                        {page}
+                      </Button>
+                    </div>
+                  );
+                })}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Edit Entry Dialog */}
       <Dialog open={!!editingEntry} onOpenChange={(open) => !open && setEditingEntry(null)}>

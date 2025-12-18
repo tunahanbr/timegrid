@@ -4,23 +4,10 @@ import { useProjects } from "@/hooks/useProjects";
 import { useClients } from "@/hooks/useClients";
 import { useTags } from "@/hooks/useTags";
 import { formatDurationShort } from "@/lib/utils-time";
-import {
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  ComposedChart,
-  Area,
-} from "recharts";
+import { TimelineChart } from "@/components/charts/TimelineChart";
+import { ProjectDistributionChart } from "@/components/charts/ProjectDistributionChart";
+import { ClientBreakdownChart } from "@/components/charts/ClientBreakdownChart";
+import { TagBreakdownChart } from "@/components/charts/TagBreakdownChart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -43,7 +30,7 @@ import {
   BarChart3,
   Filter,
 } from "lucide-react";
-import { format, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays } from "date-fns";
+import { format, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 
 type DateRange = {
@@ -78,28 +65,40 @@ export default function ReportsPage() {
   // Filter entries based on selections
   const filteredEntries = useMemo(() => {
     return entries.filter((entry) => {
-      const entryDate = parseISO(entry.date);
-      
-      // Date range filter
-      if (dateRange.from && entryDate < dateRange.from) return false;
-      if (dateRange.to && entryDate > dateRange.to) return false;
+      try {
+        const entryDate = parseISO(entry.date);
+        
+        // Date range filter with proper interval check
+        if (dateRange.from && dateRange.to) {
+          if (!isWithinInterval(entryDate, { start: dateRange.from, end: dateRange.to })) {
+            return false;
+          }
+        } else if (dateRange.from && entryDate < dateRange.from) {
+          return false;
+        } else if (dateRange.to && entryDate > dateRange.to) {
+          return false;
+        }
 
-      // Project filter
-      if (selectedProjects.length > 0 && !selectedProjects.includes(entry.projectId)) return false;
+        // Project filter
+        if (selectedProjects.length > 0 && !selectedProjects.includes(entry.projectId)) return false;
 
-      // Client filter
-      if (selectedClients.length > 0) {
-        const project = projects.find((p) => p.id === entry.projectId);
-        if (!project?.clientId || !selectedClients.includes(project.clientId)) return false;
+        // Client filter
+        if (selectedClients.length > 0) {
+          const project = projects.find((p) => p.id === entry.projectId);
+          if (!project?.clientId || !selectedClients.includes(project.clientId)) return false;
+        }
+
+        // Tag filter
+        if (selectedTags.length > 0) {
+          const hasTag = entry.tags?.some((tag) => selectedTags.includes(tag));
+          if (!hasTag) return false;
+        }
+
+        return true;
+      } catch (e) {
+        console.warn('Failed to parse entry date:', entry.date);
+        return false;
       }
-
-      // Tag filter
-      if (selectedTags.length > 0) {
-        const hasTag = entry.tags?.some((tag) => selectedTags.includes(tag));
-        if (!hasTag) return false;
-      }
-
-      return true;
     });
   }, [entries, dateRange, selectedProjects, selectedClients, selectedTags, projects]);
 
@@ -107,7 +106,22 @@ export default function ReportsPage() {
   const stats = useMemo(() => {
     const totalTime = filteredEntries.reduce((sum, entry) => sum + entry.duration, 0);
     const totalEntries = filteredEntries.length;
-    const uniqueDays = new Set(filteredEntries.map((e) => e.date)).size;
+    
+    // Group entries by day for better performance
+    const entriesByDay = new Map<string, typeof filteredEntries>();
+    filteredEntries.forEach((entry) => {
+      try {
+        const dayStr = format(parseISO(entry.date), "yyyy-MM-dd");
+        if (!entriesByDay.has(dayStr)) {
+          entriesByDay.set(dayStr, []);
+        }
+        entriesByDay.get(dayStr)!.push(entry);
+      } catch (e) {
+        console.warn('Failed to group entry by day:', entry.date);
+      }
+    });
+    
+    const uniqueDays = entriesByDay.size;
     const avgPerDay = uniqueDays > 0 ? totalTime / uniqueDays : 0;
 
     // Calculate billable hours and revenue
@@ -137,10 +151,24 @@ export default function ReportsPage() {
     if (!dateRange.from || !dateRange.to) return [];
 
     const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
+    
+    // Pre-group entries by day for better performance
+    const entriesByDay = new Map<string, typeof filteredEntries>();
+    filteredEntries.forEach((entry) => {
+      try {
+        const dayStr = format(parseISO(entry.date), "yyyy-MM-dd");
+        if (!entriesByDay.has(dayStr)) {
+          entriesByDay.set(dayStr, []);
+        }
+        entriesByDay.get(dayStr)!.push(entry);
+      } catch (e) {
+        console.warn('Failed to group entry:', entry.date);
+      }
+    });
 
     return days.map((day) => {
       const dayStr = format(day, "yyyy-MM-dd");
-      const dayEntries = filteredEntries.filter((e) => e.date === dayStr);
+      const dayEntries = entriesByDay.get(dayStr) || [];
       const dayTotal = dayEntries.reduce((sum, e) => sum + e.duration, 0);
       
       let billableTime = 0;
@@ -611,83 +639,28 @@ export default function ReportsPage() {
               <CardDescription>Daily breakdown with billable hours and revenue</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
-                <ComposedChart data={timeSeriesData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="date" className="text-xs" />
-                  <YAxis yAxisId="left" className="text-xs" label={{ value: "Hours", angle: -90, position: "insideLeft" }} />
-                  <YAxis yAxisId="right" orientation="right" className="text-xs" label={{ value: "Revenue ($)", angle: 90, position: "insideRight" }} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Area yAxisId="left" type="monotone" dataKey="hours" fill="hsl(var(--primary))" fillOpacity={0.2} stroke="hsl(var(--primary))" name="Total Hours" />
-                  <Bar yAxisId="left" dataKey="billableHours" fill="hsl(var(--chart-2))" name="Billable Hours" />
-                  <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="hsl(var(--chart-3))" strokeWidth={2} name="Revenue" />
-                </ComposedChart>
-              </ResponsiveContainer>
+              {timeSeriesData.length > 0 ? (
+                <TimelineChart data={timeSeriesData} />
+              ) : (
+                <div className="h-96 flex items-center justify-center text-muted-foreground">
+                  No data available for the selected date range
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
         {/* Projects Tab */}
         <TabsContent value="projects" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Project Distribution</CardTitle>
-                <CardDescription>Time breakdown by project</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {projectBreakdown.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={projectBreakdown}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={(entry) => `${entry.name} (${entry.percentage}%)`}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="hours"
-                      >
-                        {projectBreakdown.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<CustomTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-muted-foreground">No project data</div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Project Details</CardTitle>
-                <CardDescription>Time and revenue by project</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {projectBreakdown.length > 0 ? (
-                  <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                    {projectBreakdown.map((project, index) => (
-                      <div key={index} className="flex items-center gap-3 p-2 rounded hover:bg-muted/50">
-                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }} />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{project.name}</div>
-                          <div className="text-sm text-muted-foreground">{project.hours}h • ${project.revenue.toFixed(2)}</div>
-                        </div>
-                        <div className="text-sm font-semibold">{project.percentage}%</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-muted-foreground">No project data</div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Project Distribution</CardTitle>
+              <CardDescription>Time breakdown by project</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ProjectDistributionChart data={projectBreakdown} />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Clients Tab */}
@@ -698,26 +671,7 @@ export default function ReportsPage() {
               <CardDescription>Time and revenue by client</CardDescription>
             </CardHeader>
             <CardContent>
-              {clientBreakdown.length > 0 ? (
-                <div className="space-y-3">
-                  {clientBreakdown.map((client, index) => (
-                    <div key={index} className="flex items-center gap-4 p-3 rounded hover:bg-muted/50">
-                      <div className="flex-1">
-                        <div className="font-medium">{client.name}</div>
-                        <div className="text-sm text-muted-foreground">{client.hours} hours tracked</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold">${client.revenue.toFixed(2)}</div>
-                        <div className="text-sm text-muted-foreground">{client.percentage}% of total</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-12 text-center text-muted-foreground">
-                  No client data available. Link projects to clients to see client reports.
-                </div>
-              )}
+              <ClientBreakdownChart data={clientBreakdown} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -730,21 +684,7 @@ export default function ReportsPage() {
               <CardDescription>Time distribution by tag</CardDescription>
             </CardHeader>
             <CardContent>
-              {tagBreakdown.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {tagBreakdown.map((tag, index) => (
-                    <div key={index} className="border rounded-lg p-4">
-                      <div className="font-medium mb-1">{tag.name}</div>
-                      <div className="text-2xl font-bold font-mono">{tag.hours}h</div>
-                      <div className="text-sm text-muted-foreground">{tag.percentage}% of total time</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-12 text-center text-muted-foreground">
-                  No tag data available. Add tags to your time entries to see tag analysis.
-                </div>
-              )}
+              <TagBreakdownChart data={tagBreakdown} />
             </CardContent>
           </Card>
         </TabsContent>
