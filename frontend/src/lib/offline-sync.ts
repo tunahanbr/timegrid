@@ -54,6 +54,12 @@ export class OfflineSync {
       logger.info('Network offline', { context: 'OfflineSync' });
       this.notifyListeners({ status: 'offline', syncing: false });
     });
+
+    // Listen for manual sync trigger
+    window.addEventListener('sync-now', () => {
+      logger.info('Manual sync triggered', { context: 'OfflineSync' });
+      this.syncQueue();
+    });
   }
 
   queueOperation(operation: Omit<QueuedOperation, 'id' | 'timestamp' | 'retries'>): string {

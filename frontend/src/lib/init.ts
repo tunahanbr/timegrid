@@ -2,6 +2,8 @@ import { storage } from "./storage";
 import { setProjectsGetter } from "./tray-updater";
 import { supabaseStorage } from "./supabase-storage";
 import { offlineStorage } from "./offline-storage";
+import { indexedStorage } from "./indexed-storage";
+import { logger } from "./logger";
 
 // Centralized API base URL
 const DEFAULT_PORT = 3000;
@@ -66,25 +68,37 @@ export function clearApiUrlOverride(): void {
 }
 
 export const initializeApp = async () => {
-  // Migrate any existing localStorage data to filesystem (Tauri only)
   try {
+    logger.info('Initializing app...', { context: 'init' });
+
+    // Initialize IndexedDB storage (with localStorage fallback)
+    // This will ask user for storage permission if needed
+    await indexedStorage.initialize();
+    
+    const storageType = indexedStorage.getStorageType();
+    logger.info('Storage initialized', { 
+      context: 'init',
+      data: { storageType }
+    });
+
+    // Migrate any existing localStorage data to filesystem (Tauri only)
     await offlineStorage.migrateFromLocalStorage();
+    
+    // Set up projects getter for tray updater
+    setProjectsGetter(async () => {
+      try {
+        const projects = await supabaseStorage.getProjects();
+        return projects.map(p => ({ id: p.id, name: p.name }));
+      } catch (error) {
+        console.error('Failed to fetch projects for tray:', error);
+        // Fallback to localStorage
+        return storage.getProjects();
+      }
+    });
+
+    logger.info('App initialized successfully', { context: 'init' });
   } catch (error) {
-    console.error('[Init] Failed to migrate localStorage data:', error);
+    logger.error('Failed to initialize app', error, { context: 'init' });
+    // Don't throw - let app continue with degraded functionality
   }
-  
-  // No default projects - users start with clean slate
-  // Projects will be created by users or loaded from Supabase
-  
-  // Set up projects getter for tray updater
-  setProjectsGetter(async () => {
-    try {
-      const projects = await supabaseStorage.getProjects();
-      return projects.map(p => ({ id: p.id, name: p.name }));
-    } catch (error) {
-      console.error('Failed to fetch projects for tray:', error);
-      // Fallback to localStorage
-      return storage.getProjects();
-    }
-  });
 };

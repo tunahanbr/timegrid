@@ -1,6 +1,13 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { logger } from "@/lib/logger";
 import { getApiUrl } from "@/lib/init";
+import { 
+  cacheSession, 
+  getCachedSession, 
+  isCachedSessionValid, 
+  clearCachedSession,
+  CachedSession
+} from "@/lib/session-crypto";
 
 
 // User type
@@ -46,37 +53,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const checkAuth = async () => {
       const token = localStorage.getItem('auth_token');
       
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+      if (token) {
+        try {
+          // First, try to verify token with server (online)
+          const response = await fetch(`${getApiUrl()}/api/auth/user`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
 
-      try {
-        // Verify token by fetching current user
-        const response = await fetch(`${getApiUrl()}/api/auth/user`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.user) {
-            setUser(data.user);
-            setSession({ user: data.user, token });
-            logger.info('Auth restored from token');
+          if (response.ok) {
+            const data = await response.json();
+            if (data.user) {
+              setUser(data.user);
+              setSession({ user: data.user, token });
+              logger.info('Auth restored from token (server verified)');
+            }
+          } else {
+            // Token invalid/expired - try cached session as fallback
+            logger.warn('Token verification failed, checking cache');
+            const cached = await getCachedSession();
+            if (cached && isCachedSessionValid(cached)) {
+              setUser(cached.user);
+              setSession({ user: cached.user, token: cached.token });
+              logger.info('Auth restored from encrypted cache');
+            } else {
+              // Cache invalid or expired too
+              logger.warn('Cached session invalid or expired');
+              localStorage.removeItem('auth_token');
+              clearCachedSession();
+            }
           }
-        } else {
-          // Token invalid/expired - clear it
-          logger.warn('Token invalid, clearing auth');
-          localStorage.removeItem('auth_token');
+        } catch (error) {
+          // Offline or network error - try cached session
+          logger.warn('Token verification failed (likely offline), checking cache', { error });
+          const cached = await getCachedSession();
+          if (cached && isCachedSessionValid(cached)) {
+            setUser(cached.user);
+            setSession({ user: cached.user, token: cached.token });
+            logger.info('Auth restored from encrypted cache (offline)');
+          } else {
+            // Cache invalid or expired
+            logger.warn('Cached session invalid or expired');
+            localStorage.removeItem('auth_token');
+            clearCachedSession();
+          }
         }
-      } catch (error) {
-        logger.error('Auth check failed', error);
-        localStorage.removeItem('auth_token');
-      } finally {
-        setLoading(false);
+      } else {
+        // No token in localStorage, try cached session as fallback
+        const cached = await getCachedSession();
+        if (cached && isCachedSessionValid(cached)) {
+          setUser(cached.user);
+          setSession({ user: cached.user, token: cached.token });
+          localStorage.setItem('auth_token', cached.token);
+          logger.info('Auth restored from encrypted cache (no token in storage)');
+        }
       }
+
+      setLoading(false);
     };
 
     checkAuth();
@@ -110,6 +144,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user);
         setSession({ user: data.user, token: data.token });
         localStorage.setItem('auth_token', data.token);
+        
+        // Cache encrypted session for offline use
+        const expiresAt = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days
+        await cacheSession({
+          user: data.user,
+          token: data.token,
+          expiresAt,
+          encryptedAt: Date.now(),
+          deviceId: '', // Will be set by cacheSession
+        });
+        
         logger.info('Signup successful', { data: { email: data.user.email } });
       }
 
@@ -182,6 +227,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user);
         setSession({ user: data.user, token: data.token });
         localStorage.setItem('auth_token', data.token);
+        
+        // Cache encrypted session for offline use
+        const expiresAt = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days
+        await cacheSession({
+          user: data.user,
+          token: data.token,
+          expiresAt,
+          encryptedAt: Date.now(),
+          deviceId: '', // Will be set by cacheSession
+        });
+        
         logger.info('Signin successful', { data: { email: data.user.email } });
       }
 
@@ -202,10 +258,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       logger.error('Signout error', error);
     } finally {
-      // Clear local state
+      // Clear local state and cache
       setUser(null);
       setSession(null);
       localStorage.removeItem('auth_token');
+      clearCachedSession();
       logger.info('Signed out');
     }
   };

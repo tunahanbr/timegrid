@@ -7,6 +7,8 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SyncIndicator } from "@/components/SyncIndicator";
+import { OfflineGate } from "@/components/OfflineGate";
+import { StorageNotifications } from "@/components/StorageNotifications";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Suspense, lazy } from "react";
@@ -71,7 +73,7 @@ initializeApp().catch(error => {
   console.error('[App] Failed to initialize app:', error);
 });
 
-const AppLayout = ({ children }: { children: React.ReactNode }) => {
+const AppRoutes = ({ children }: { children: React.ReactNode }) => {
   const [todayTotal, setTodayTotal] = useState(0);
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
   const { user, signOut } = useAuth();
@@ -192,7 +194,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-const App = () => {
+const AppContent = () => {
   const isWidgetRoute = window.location.pathname === '/timer-widget';
   
   // Listen for offline sync completion to refetch queries
@@ -222,60 +224,123 @@ const App = () => {
   }, []);
   
   return (
+    <>
+      {!isWidgetRoute && <Toaster />}
+      {!isWidgetRoute && <Sonner />}
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Suspense fallback={<PageLoader />}><LoginPage /></Suspense>} />
+          <Route path="/signup" element={<Suspense fallback={<PageLoader />}><SignUpPage /></Suspense>} />
+          <Route 
+            path="/timer-widget" 
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <TimerWidgetPage />
+                </Suspense>
+              </ProtectedRoute>
+            } 
+          />
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <AppRoutes>
+                <Suspense fallback={<PageLoader />}>
+                  <Routes>
+                    <Route path="/" element={<TimerPage />} />
+                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/reports" element={<ReportsPage />} />
+                    <Route path="/entries" element={<EntriesPage />} />
+                    <Route path="/projects" element={<ProjectsPage />} />
+                    <Route path="/clients" element={<ClientsPage />} />
+                    <Route path="/invoices" element={<InvoicesPage />} />
+                    <Route path="/budgets" element={<BudgetsPage />} />
+                    <Route path="/expenses" element={<ExpensesPage />} />
+                    <Route path="/team" element={<TeamPage />} />
+                    <Route path="/tags" element={<TagsPage />} />
+                    <Route path="/api" element={<APIPage />} />
+                    <Route path="/import" element={<ImportPage />} />
+                    <Route path="/integrations" element={<IntegrationsPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Suspense>
+              </AppRoutes>
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </BrowserRouter>
+    </>
+  );
+}
+
+// Main App component with providers
+function App() {
+  return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
-          {!isWidgetRoute && <Toaster />}
-          {!isWidgetRoute && <Sonner />}
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<Suspense fallback={<PageLoader />}><LoginPage /></Suspense>} />
-              <Route path="/signup" element={<Suspense fallback={<PageLoader />}><SignUpPage /></Suspense>} />
-              <Route 
-                path="/timer-widget" 
-                element={
-                  <ProtectedRoute>
-                    <Suspense fallback={<PageLoader />}>
-                      <TimerWidgetPage />
-                    </Suspense>
-                  </ProtectedRoute>
-                } 
-              />
-            <Route
-              path="/*"
-              element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <Suspense fallback={<PageLoader />}>
-                      <Routes>
-                        <Route path="/" element={<TimerPage />} />
-                        <Route path="/dashboard" element={<DashboardPage />} />
-                        <Route path="/reports" element={<ReportsPage />} />
-                        <Route path="/entries" element={<EntriesPage />} />
-                        <Route path="/projects" element={<ProjectsPage />} />
-                        <Route path="/clients" element={<ClientsPage />} />
-                        <Route path="/invoices" element={<InvoicesPage />} />
-                        <Route path="/budgets" element={<BudgetsPage />} />
-                        <Route path="/expenses" element={<ExpensesPage />} />
-                        <Route path="/team" element={<TeamPage />} />
-                        <Route path="/tags" element={<TagsPage />} />
-                        <Route path="/api" element={<APIPage />} />
-                        <Route path="/import" element={<ImportPage />} />
-                        <Route path="/integrations" element={<IntegrationsPage />} />
-                        <Route path="/settings" element={<SettingsPage />} />
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
-                    </Suspense>
-                  </AppLayout>
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
+          <StorageNotifications />
+          <OfflineGateWrapper />
+        </TooltipProvider>
+      </AuthProvider>
+    </QueryClientProvider>
   );
-};
+}
+
+// Wrapper component to handle offline gate
+function OfflineGateWrapper() {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [gateDismissed, setGateDismissed] = useState(false);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setGateDismissed(false); // Reset when coming back online
+      
+      // Notify user and trigger sync
+      window.dispatchEvent(new CustomEvent('storage-notification', {
+        detail: { message: 'Back online! Syncing your changes...', type: 'success' }
+      }));
+      
+      // Trigger offline sync
+      window.dispatchEvent(new Event('sync-now'));
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      
+      // Notify user they're offline
+      window.dispatchEvent(new CustomEvent('storage-notification', {
+        detail: { message: 'You\'re offline. Changes will sync when you reconnect.', type: 'warning' }
+      }));
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Only show gate if offline AND not dismissed
+  const showGate = !isOnline && !gateDismissed;
+
+  return (
+    <>
+      {showGate && (
+        <OfflineGate 
+          onlineStatus={isOnline}
+          onContinueOffline={() => setGateDismissed(true)}
+        />
+      )}
+      <AppContent />
+    </>
+  );
+}
 
 export default App;

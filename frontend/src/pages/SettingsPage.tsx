@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useState, useEffect } from "react";
 import { useUserSettings } from "@/hooks/useUserSettings";
+import { StorageInfo } from "@/components/StorageInfo";
 
 // Feature settings interface
 interface FeatureSettings {
@@ -513,6 +514,9 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Storage Info */}
+        <StorageInfo />
 
         {/* Data Management */}
         <Card>
