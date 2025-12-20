@@ -27,22 +27,12 @@ import { MobileTabBar } from "@/components/MobileTabBar";
 // Lazy load pages for code splitting
 const TimerPage = lazy(() => import("./pages/TimerPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
-const ReportsPage = lazy(() => import("./pages/ReportsPage"));
 const EntriesPage = lazy(() => import("./pages/EntriesPage"));
 const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
 const TagsPage = lazy(() => import("./pages/TagsPage"));
-const BudgetsPage = lazy(() => import("./pages/BudgetsPage"));
-const ExpensesPage = lazy(() => import("./pages/ExpensesPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
-const ClientsPage = lazy(() => import("./pages/ClientsPage"));
-const TeamPage = lazy(() => import("./pages/TeamPage"));
-const InvoicesPage = lazy(() => import("./pages/InvoicesPage"));
-const APIPage = lazy(() => import("./pages/APIPage"));
-const ImportPage = lazy(() => import("./pages/ImportPage"));
-const IntegrationsPage = lazy(() => import("./pages/IntegrationsPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const SignUpPage = lazy(() => import("./pages/SignUpPage"));
-const NotFound = lazy(() => import("./pages/NotFound"));
 const TimerWidgetPage = lazy(() => import("./pages/TimerWidgetPage"));
 
 // Loading fallback component
@@ -250,20 +240,11 @@ const AppContent = () => {
                   <Routes>
                     <Route path="/" element={<TimerPage />} />
                     <Route path="/dashboard" element={<DashboardPage />} />
-                    <Route path="/reports" element={<ReportsPage />} />
                     <Route path="/entries" element={<EntriesPage />} />
                     <Route path="/projects" element={<ProjectsPage />} />
-                    <Route path="/clients" element={<ClientsPage />} />
-                    <Route path="/invoices" element={<InvoicesPage />} />
-                    <Route path="/budgets" element={<BudgetsPage />} />
-                    <Route path="/expenses" element={<ExpensesPage />} />
-                    <Route path="/team" element={<TeamPage />} />
                     <Route path="/tags" element={<TagsPage />} />
-                    <Route path="/api" element={<APIPage />} />
-                    <Route path="/import" element={<ImportPage />} />
-                    <Route path="/integrations" element={<IntegrationsPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
-                    <Route path="*" element={<NotFound />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Suspense>
               </AppRoutes>
