@@ -19,7 +19,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useProjects } from "@/hooks/useProjects";
-import { useClients } from "@/hooks/useClients";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -44,8 +43,7 @@ export default function ProjectsPage() {
   const { toast } = useToast();
   const [newProjectName, setNewProjectName] = useState("");
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
-  const [selectedClient, setSelectedClient] = useState<string | null>(null);
-  const [newHourlyRate, setNewHourlyRate] = useState("");
+  const [newProjectDescription, setNewProjectDescription] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [sharingProject, setSharingProject] = useState<any>(null);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -59,8 +57,7 @@ export default function ProjectsPage() {
   const [editingProject, setEditingProject] = useState<any>(null);
   const [editProjectName, setEditProjectName] = useState("");
   const [editProjectColor, setEditProjectColor] = useState(PRESET_COLORS[0]);
-  const [editProjectClient, setEditProjectClient] = useState<string | null>(null);
-  const [editHourlyRate, setEditHourlyRate] = useState("");
+  const [editProjectDescription, setEditProjectDescription] = useState("");
 
   const {
     projects,
@@ -73,8 +70,6 @@ export default function ProjectsPage() {
     isUpdating,
     isDeleting,
   } = useProjects();
-
-  const { clients } = useClients();
 
   const handleAddProject = () => {
     console.log('[ProjectsPage] handleAddProject called');
@@ -93,8 +88,7 @@ export default function ProjectsPage() {
       const result = addProject({
         name: newProjectName.trim(),
         color: selectedColor,
-        clientId: selectedClient || undefined,
-        hourlyRate: newHourlyRate ? parseFloat(newHourlyRate) : undefined,
+        description: newProjectDescription.trim() || undefined,
       });
       console.log('[ProjectsPage] addProject result:', result);
     } catch (error) {
@@ -103,8 +97,7 @@ export default function ProjectsPage() {
 
     setNewProjectName("");
     setSelectedColor(PRESET_COLORS[0]);
-    setSelectedClient(null);
-    setNewHourlyRate("");
+    setNewProjectDescription("");
     setIsAdding(false);
   };
 
@@ -128,8 +121,7 @@ export default function ProjectsPage() {
     setEditingProject(project);
     setEditProjectName(project.name);
     setEditProjectColor(project.color);
-    setEditProjectClient(project.clientId || null);
-    setEditHourlyRate(project.hourlyRate ? project.hourlyRate.toString() : "");
+    setEditProjectDescription(project.description || "");
   };
 
   const handleUpdateProject = () => {
@@ -142,8 +134,7 @@ export default function ProjectsPage() {
       updates: {
         name: editProjectName.trim(),
         color: editProjectColor,
-        clientId: editProjectClient || undefined,
-        hourlyRate: editHourlyRate ? parseFloat(editHourlyRate) : undefined,
+        description: editProjectDescription.trim() || undefined,
       },
     });
 
@@ -236,37 +227,14 @@ export default function ProjectsPage() {
           />
           
           <div className="space-y-2">
-            <div className="text-sm font-medium">Client (Optional)</div>
-            <Select value={selectedClient || "none"} onValueChange={(value) => setSelectedClient(value === "none" ? null : value)}>
-              <SelectTrigger aria-label="Select client for project">
-                <SelectValue placeholder="Select a client (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No client</SelectItem>
-                {clients.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Hourly Rate (Optional)</div>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true">$</span>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={newHourlyRate}
-                onChange={(e) => setNewHourlyRate(e.target.value)}
-                className="pl-7"
-                aria-label="Hourly rate in dollars"
-              />
-            </div>
+            <Label htmlFor="project-description">Description (Optional)</Label>
+            <Input
+              id="project-description"
+              placeholder="What is this project for?"
+              value={newProjectDescription}
+              onChange={(e) => setNewProjectDescription(e.target.value)}
+              aria-label="Project description"
+            />
           </div>
           
           <div className="space-y-2">
@@ -413,7 +381,7 @@ export default function ProjectsPage() {
           <DialogHeader>
             <DialogTitle>Edit Project</DialogTitle>
             <DialogDescription>
-              Update the project name, hourly rate, and color
+              Update the project name, description, and color
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -429,37 +397,13 @@ export default function ProjectsPage() {
             </div>
 
             <div>
-              <Label>Client (Optional)</Label>
-              <Select value={editProjectClient || "none"} onValueChange={(value) => setEditProjectClient(value === "none" ? null : value)}>
-                <SelectTrigger className="mt-2">
-                  <SelectValue placeholder="Select a client (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No client</SelectItem>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="edit-hourly-rate">Hourly Rate (Optional)</Label>
-              <div className="relative mt-2">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                <Input
-                  id="edit-hourly-rate"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={editHourlyRate}
-                  onChange={(e) => setEditHourlyRate(e.target.value)}
-                  className="pl-7"
-                />
-              </div>
+              <Label htmlFor="edit-project-description">Description (Optional)</Label>
+              <Input
+                id="edit-project-description"
+                placeholder="What is this project for?"
+                value={editProjectDescription}
+                onChange={(e) => setEditProjectDescription(e.target.value)}
+              />
             </div>
 
             <div>

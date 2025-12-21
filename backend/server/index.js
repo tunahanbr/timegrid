@@ -640,13 +640,7 @@ const ALLOWED_TABLES = new Set([
   'projects',
   'clients',
   'tags',
-  'invoices',
-  'invoice_items',
-  'expenses',
-  'team_members',
   'users',
-  'project_budgets',
-  'recurring_invoices',
 ]);
 
 // Tables that are user-owned and include a `user_id` column
@@ -656,10 +650,6 @@ const TABLES_WITH_USER_ID = new Set([
   'clients',
   'tags',
   'team_members',
-  'expenses',
-  'project_budgets',
-  'recurring_invoices',
-  'invoices',
 ]);
 
 // Basic identifier validation: allow letters, numbers, underscore, dot (for qualified names)
@@ -1118,7 +1108,8 @@ app.post('/api/auth/refresh', async (req, res) => {
   }
 });
 
-// API Key management
+// API Key management - DISABLED
+/*
 app.post('/api/auth/api-keys', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -1201,3 +1192,4 @@ app.patch('/api/auth/api-keys/:keyId', authenticateToken, async (req, res) => {
     client.release();
   }
 });
+*/

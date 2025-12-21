@@ -229,16 +229,6 @@ export default function EntriesPage() {
     return filteredEntries.reduce((sum, entry) => sum + entry.duration, 0);
   }, [filteredEntries]);
 
-  const totalBillable = useMemo(() => {
-    return filteredEntries.reduce((sum, entry) => {
-      const project = projects.find(p => p.id === entry.projectId);
-      if (project?.hourlyRate) {
-        return sum + (entry.duration / 3600) * project.hourlyRate;
-      }
-      return sum;
-    }, 0);
-  }, [filteredEntries, projects]);
-
   const isDatabaseError = entriesError && (entriesError.message?.includes('404') || (entriesError as any).code === 'PGRST116');
   const isLoading = isLoadingEntries || isLoadingProjects;
 
@@ -267,11 +257,6 @@ export default function EntriesPage() {
                       <span className="ml-2 font-mono">
                         • Total: {formatDurationShort(totalFiltered)}
                       </span>
-                      {totalBillable > 0 && (
-                        <span className="ml-2 font-mono text-green-600 dark:text-green-400">
-                          • ${totalBillable.toFixed(2)}
-                        </span>
-                      )}
                     </>
                   )}
                 </>
@@ -373,16 +358,9 @@ export default function EntriesPage() {
               <div key={date} className="space-y-2">
                 <div className="flex items-center justify-between border-b border-border pb-2">
                   <h2 className="text-lg font-semibold">{formatDate(date)}</h2>
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm text-muted-foreground font-mono">
-                      {formatDurationShort(dayTotal)}
-                    </span>
-                    {dayBillable > 0 && (
-                      <span className="text-sm text-green-600 dark:text-green-400 font-mono">
-                        ${dayBillable.toFixed(2)}
-                      </span>
-                    )}
-                  </div>
+                  <span className="text-sm text-muted-foreground font-mono">
+                    {formatDurationShort(dayTotal)}
+                  </span>
                 </div>
 
                 <div className="space-y-1">
@@ -440,11 +418,6 @@ export default function EntriesPage() {
                           <div className="font-mono text-sm">
                             {formatDurationShort(entry.duration)}
                           </div>
-                          {project?.hourlyRate && (
-                            <div className="text-xs text-muted-foreground">
-                              ${((entry.duration / 3600) * project.hourlyRate).toFixed(2)}
-                            </div>
-                          )}
                         </div>
                         <Button
                           variant="ghost"

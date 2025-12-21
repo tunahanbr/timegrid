@@ -8,14 +8,15 @@ import { useState, useEffect } from "react";
 import { useUserSettings } from "@/hooks/useUserSettings";
 
 const PERSONAL_FEATURES = {
-  clients: false,
-  invoicing: false,
+  clients: true,
+  projects: true,
   tags: true,
   reports: false,
-  collaboration: false,
+  collaboration: true,
+  apiKeys: false,
+  invoicing: false,
   budgets: false,
   expenses: false,
-  apiKeys: false,
   import: false,
   integrations: false,
 };
