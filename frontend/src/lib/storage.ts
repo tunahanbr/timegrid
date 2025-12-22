@@ -5,7 +5,12 @@ export interface TimeEntry {
   tags: string[];
   duration: number; // in seconds
   date: string; // ISO date
+  startTime?: string; // ISO datetime (e.g., "2025-12-22T09:00:00Z")
+  endTime?: string; // ISO datetime (e.g., "2025-12-22T10:30:00Z")
   createdAt: string;
+  isRecurring?: boolean;
+  recurrenceRule?: string; // RFC 5545 RRULE format (e.g., "FREQ=WEEKLY;BYDAY=MO,WE,FR")
+  parentEntryId?: string;
 }
 
 export interface Project {

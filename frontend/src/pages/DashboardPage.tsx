@@ -6,11 +6,12 @@ import { formatDurationShort } from "@/lib/utils-time";
 import { TimelineChart } from "@/components/charts/TimelineChart";
 import { ProjectDistributionChart } from "@/components/charts/ProjectDistributionChart";
 import { TagBreakdownChart } from "@/components/charts/TagBreakdownChart";
+import { ContributionHeatmap } from "@/components/ContributionHeatmap";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Calendar, Clock, TrendingUp, Folder, AlertCircle, Hash, Zap } from "lucide-react";
+import { Calendar, Clock, TrendingUp, Folder, AlertCircle, Hash, Zap, Flame } from "lucide-react";
 import { format, subDays, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, formatISO, isWithinInterval, getDay } from "date-fns";
 import { useState } from "react";
 
@@ -312,6 +313,20 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Contribution Heatmap */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Flame className="h-5 w-5" />
+            Contribution Activity
+          </CardTitle>
+          <CardDescription>Track your consistency over the past year</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ContributionHeatmap entries={entries || []} showLabel={true} />
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Daily Trend Chart */}

@@ -7,9 +7,14 @@ export interface TimeEntry {
   tags: string[];
   duration: number;
   date: string;
+  startTime?: string; // ISO datetime
+  endTime?: string; // ISO datetime
   createdAt: string;
   userId?: string;
   isBillable?: boolean;
+  isRecurring?: boolean;
+  recurrenceRule?: string; // RFC 5545 RRULE format
+  parentEntryId?: string;
 }
 
 export interface Project {
