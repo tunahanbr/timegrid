@@ -71,6 +71,8 @@
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",
+    "ical-expander": "^3.0.0",
+    "ical.js": "^2.1.0",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
     "pg": "^8.16.3",

@@ -1,6 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ExternalCalendarsProvider } from "@/contexts/ExternalCalendarsContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -27,6 +28,7 @@ import { MobileTabBar } from "@/components/MobileTabBar";
 // Lazy load pages for code splitting
 const TimerPage = lazy(() => import("./pages/TimerPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const CalendarPage = lazy(() => import("./pages/CalendarPage"));
 const EntriesPage = lazy(() => import("./pages/EntriesPage"));
 const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
 const TagsPage = lazy(() => import("./pages/TagsPage"));
@@ -217,42 +219,41 @@ const AppContent = () => {
     <>
       {!isWidgetRoute && <Toaster />}
       {!isWidgetRoute && <Sonner />}
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Suspense fallback={<PageLoader />}><LoginPage /></Suspense>} />
-          <Route path="/signup" element={<Suspense fallback={<PageLoader />}><SignUpPage /></Suspense>} />
-          <Route 
-            path="/timer-widget" 
-            element={
-              <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <TimerWidgetPage />
-                </Suspense>
-              </ProtectedRoute>
-            } 
-          />
-        <Route
-          path="/*"
+      <Routes>
+        <Route path="/login" element={<Suspense fallback={<PageLoader />}><LoginPage /></Suspense>} />
+        <Route path="/signup" element={<Suspense fallback={<PageLoader />}><SignUpPage /></Suspense>} />
+        <Route 
+          path="/timer-widget" 
           element={
             <ProtectedRoute>
-              <AppRoutes>
-                <Suspense fallback={<PageLoader />}>
-                  <Routes>
-                    <Route path="/" element={<TimerPage />} />
-                    <Route path="/dashboard" element={<DashboardPage />} />
-                    <Route path="/entries" element={<EntriesPage />} />
-                    <Route path="/projects" element={<ProjectsPage />} />
-                    <Route path="/tags" element={<TagsPage />} />
-                    <Route path="/settings" element={<SettingsPage />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </Suspense>
-              </AppRoutes>
+              <Suspense fallback={<PageLoader />}>
+                <TimerWidgetPage />
+              </Suspense>
             </ProtectedRoute>
-          }
+          } 
         />
-      </Routes>
-    </BrowserRouter>
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <AppRoutes>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  <Route path="/" element={<TimerPage />} />
+                  <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/calendar" element={<CalendarPage />} />
+                  <Route path="/entries" element={<EntriesPage />} />
+                  <Route path="/projects" element={<ProjectsPage />} />
+                  <Route path="/tags" element={<TagsPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Suspense>
+            </AppRoutes>
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
     </>
   );
 }
@@ -262,10 +263,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <TooltipProvider>
-          <StorageNotifications />
-          <OfflineGateWrapper />
-        </TooltipProvider>
+        <BrowserRouter>
+          <TooltipProvider>
+            <ExternalCalendarsProvider>
+              <StorageNotifications />
+              <OfflineGateWrapper />
+            </ExternalCalendarsProvider>
+          </TooltipProvider>
+        </BrowserRouter>
       </AuthProvider>
     </QueryClientProvider>
   );

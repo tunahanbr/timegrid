@@ -1,6 +1,6 @@
 import type { ElementType } from "react";
 import { NavLink } from "@/components/NavLink";
-import { Timer, List, FolderKanban, Hash, Settings, BarChart3 } from "lucide-react";
+import { Timer, List, FolderKanban, Hash, Settings, BarChart3, Calendar } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -16,6 +16,7 @@ export function AppSidebar() {
   const primaryNav = [
     { name: "Timer", href: "/", icon: Timer },
     { name: "Dashboard", href: "/dashboard", icon: BarChart3 },
+    { name: "Calendar", href: "/calendar", icon: Calendar },
     { name: "Entries", href: "/entries", icon: List },
   ];
 

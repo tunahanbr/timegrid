@@ -590,6 +590,185 @@ app.get('/api/auth/user', authenticateToken, async (req, res) => {
 // ============================================================================
 
 // ============================================================================
+// EXTERNAL INTEGRATIONS: iCal Proxy (avoids browser CORS; mitigates SSRF)
+// ============================================================================
+
+function isBlockedHost(hostname) {
+  if (!hostname) return true;
+  const lower = String(hostname).toLowerCase();
+  // Obvious local targets
+  if (lower === 'localhost' || lower === 'ip6-localhost') return true;
+  if (lower === '127.0.0.1' || lower === '::1' || lower === '0.0.0.0') return true;
+  // Private IPv4 ranges and link-local
+  if (/^(10|192\.168|172\.(1[6-9]|2[0-9]|3[0-1])|169\.254)\./.test(lower)) return true;
+  return false;
+}
+
+app.get('/api/proxy/ical', authenticateToken, async (req, res) => {
+  try {
+    const raw = req.query.url;
+    if (!raw || typeof raw !== 'string') {
+      return res.status(400).json({ error: 'Missing url parameter' });
+    }
+    let decoded;
+    try {
+      decoded = decodeURIComponent(raw);
+    } catch {
+      decoded = raw;
+    }
+    let target;
+    try {
+      target = new URL(decoded);
+    } catch {
+      return res.status(400).json({ error: 'Invalid URL' });
+    }
+    if (!/^https?:$/.test(target.protocol)) {
+      return res.status(400).json({ error: 'Only http/https URLs are allowed' });
+    }
+    if (isBlockedHost(target.hostname)) {
+      return res.status(400).json({ error: 'Blocked host' });
+    }
+
+    // Fetch with a timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const response = await fetch(target.toString(), {
+      method: 'GET',
+      signal: controller.signal,
+      // user-agent helps some providers allow the request
+      headers: { 'User-Agent': 'TimeGrid/1.0 (+ical-proxy)' },
+    }).catch((e) => {
+      clearTimeout(timeout);
+      throw e;
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `Upstream error ${response.status}` });
+    }
+
+    const text = await response.text();
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    // Allow caching briefly to reduce load; adjust as needed
+    res.setHeader('Cache-Control', 'private, max-age=60');
+    return res.status(200).send(text);
+  } catch (err) {
+    const msg = err && err.name === 'AbortError' ? 'Upstream timeout' : (err?.message || 'Proxy error');
+    return res.status(502).json({ error: msg });
+  }
+});
+
+// ============================================================================
+// ICS EXPORT ROUTES (Subscribe from Google/Apple/Outlook)
+// ============================================================================
+
+// Generate or rotate an export token for ICS feeds (per-user). Requires auth.
+app.post('/api/export/ics/token', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const userId = req.user.id;
+    const token = crypto.randomBytes(24).toString('hex');
+    await client.query(
+      `UPDATE users
+       SET settings = jsonb_set(
+         COALESCE(settings, '{}'::jsonb),
+         '{exportIcsToken}',
+         to_jsonb($2::text),
+         true
+       )
+       WHERE id = $1`,
+      [userId, token]
+    );
+    clearCachedSettings(userId);
+    const url = `${req.protocol}://${req.get('host')}/api/export/ics?token=${token}`;
+    return res.json({ token, url });
+  } catch (e) {
+    console.error('Failed to generate ICS token:', e);
+    return res.status(500).json({ error: 'Failed to generate token' });
+  } finally {
+    client.release();
+  }
+});
+
+// Public ICS endpoint using URL token. Optional query: projectId or calendarId to filter.
+// Example: /api/export/ics?token=...&projectId=uuid or &calendarId=uuid
+app.get('/api/export/ics', async (req, res) => {
+  const { token, projectId, calendarId } = req.query;
+  if (!token || typeof token !== 'string') {
+    return res.status(400).send('Missing token');
+  }
+  const client = await pool.connect();
+  try {
+    const ures = await client.query(
+      `SELECT id, settings FROM users WHERE settings->>'exportIcsToken' = $1 LIMIT 1`,
+      [token]
+    );
+    if (ures.rowCount === 0) {
+      return res.status(404).send('Not found');
+    }
+    const userId = ures.rows[0].id;
+
+    // Time window: past 180 days to next 30 days
+    const start = new Date();
+    start.setUTCDate(start.getUTCDate() - 180);
+    const end = new Date();
+    end.setUTCDate(end.getUTCDate() + 30);
+
+    const params = [userId, start, end];
+    let sql = `
+      SELECT te.id, te.start_time, te.end_time, te.duration, te.description,
+             p.name AS project_name, p.color AS project_color,
+             c.name AS calendar_name, c.color AS calendar_color
+      FROM time_entries te
+      LEFT JOIN projects p ON p.id = te.project_id
+      LEFT JOIN calendars c ON c.id = te.calendar_id
+      WHERE te.user_id = $1
+        AND te.start_time >= $2
+        AND te.end_time <= $3`;
+    if (projectId && typeof projectId === 'string') {
+      params.push(projectId);
+      sql += ' AND te.project_id = $' + params.length;
+    }
+    if (calendarId && typeof calendarId === 'string') {
+      params.push(calendarId);
+      sql += ' AND te.calendar_id = $' + params.length;
+    }
+    sql += ' ORDER BY te.start_time ASC';
+
+    const eres = await client.query(sql, params);
+    const events = eres.rows.map((r) => {
+      const start = r.start_time ? new Date(r.start_time) : null;
+      const end = r.end_time ? new Date(r.end_time) : (start ? new Date(start.getTime() + (r.duration || 0) * 1000) : null);
+      return {
+        uid: `te-${r.id}@time-brutalist`,
+        start: start || new Date(),
+        end: end || new Date(),
+        summary: r.calendar_name || r.project_name || 'Time Entry',
+        description: r.description || undefined,
+        location: undefined,
+      };
+    });
+
+    let calendarName = 'Time Brutalist – My Entries';
+    if (projectId && typeof projectId === 'string') {
+      calendarName = `Time Brutalist – Project ${projectId}`;
+    }
+    if (calendarId && typeof calendarId === 'string') {
+      calendarName = `Time Brutalist – Calendar ${calendarId}`;
+    }
+    const ics = buildICSFeed({ calendarName, events });
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    return res.status(200).send(ics);
+  } catch (e) {
+    console.error('ICS export error:', e);
+    return res.status(500).send('Server error');
+  } finally {
+    client.release();
+  }
+});
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
@@ -630,6 +809,56 @@ function clearCachedSettings(userId) {
   settingsCache.delete(userId);
 }
 
+// ICS generation helpers (UTC times)
+function formatDateToICS(dt) {
+  // Ensure Date instance and return YYYYMMDDTHHMMSSZ
+  const d = dt instanceof Date ? dt : new Date(dt);
+  const pad = (n) => String(n).padStart(2, '0');
+  return (
+    d.getUTCFullYear().toString() +
+    pad(d.getUTCMonth() + 1) +
+    pad(d.getUTCDate()) + 'T' +
+    pad(d.getUTCHours()) +
+    pad(d.getUTCMinutes()) +
+    pad(d.getUTCSeconds()) + 'Z'
+  );
+}
+
+function escapeICSText(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;');
+}
+
+function buildICSFeed({ prodId = '-//Time Brutalist//EN', calendarName = 'Time Brutalist', events = [] }) {
+  const lines = [];
+  lines.push('BEGIN:VCALENDAR');
+  lines.push('VERSION:2.0');
+  lines.push(`PRODID:${prodId}`);
+  lines.push('CALSCALE:GREGORIAN');
+  lines.push(`X-WR-CALNAME:${escapeICSText(calendarName)}`);
+  // Each event
+  const nowStr = formatDateToICS(new Date());
+  for (const ev of events) {
+    lines.push('BEGIN:VEVENT');
+    lines.push(`UID:${ev.uid}`);
+    lines.push(`DTSTAMP:${nowStr}`);
+    lines.push(`DTSTART:${formatDateToICS(ev.start)}`);
+    lines.push(`DTEND:${formatDateToICS(ev.end)}`);
+    if (ev.summary) lines.push(`SUMMARY:${escapeICSText(ev.summary)}`);
+    if (ev.description) lines.push(`DESCRIPTION:${escapeICSText(ev.description)}`);
+    if (ev.location) lines.push(`LOCATION:${escapeICSText(ev.location)}`);
+    lines.push('STATUS:CONFIRMED');
+    lines.push('END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
 // ----------------------------------------------------------------------------
 // SAFE QUERY HELPERS
 // ----------------------------------------------------------------------------
@@ -641,6 +870,7 @@ const ALLOWED_TABLES = new Set([
   'clients',
   'tags',
   'users',
+  'calendars',
 ]);
 
 // Tables that are user-owned and include a `user_id` column
@@ -650,6 +880,7 @@ const TABLES_WITH_USER_ID = new Set([
   'clients',
   'tags',
   'team_members',
+  'calendars',
 ]);
 
 // Basic identifier validation: allow letters, numbers, underscore, dot (for qualified names)
@@ -850,8 +1081,17 @@ app.get('/api/:table', authenticateToken, async (req, res) => {
       setCachedSettings(filters.id, result.rows[0].settings);
     }
     
+    // Convert snake_case to camelCase in response
+    const camelCaseRows = result.rows.map(row => {
+      const camelRow = {};
+      for (const [key, value] of Object.entries(row)) {
+        camelRow[snakeToCamel(key)] = value;
+      }
+      return camelRow;
+    });
+    
     const response = { 
-      data: result.rows, 
+      data: camelCaseRows, 
       error: null, 
       count: result.rowCount 
     };
@@ -868,6 +1108,16 @@ app.get('/api/:table', authenticateToken, async (req, res) => {
     client.release();
   }
 });
+
+// Helper to convert camelCase to snake_case
+const camelToSnake = (str) => {
+  return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+};
+
+// Helper to convert snake_case to camelCase
+const snakeToCamel = (str) => {
+  return str.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+};
 
 // INSERT - Create new record(s)
 app.post('/api/:table', authenticateToken, async (req, res) => {
@@ -892,7 +1142,19 @@ app.post('/api/:table', authenticateToken, async (req, res) => {
       if (TABLES_WITH_USER_ID.has(table) && !('user_id' in copy)) {
         copy.user_id = req.user.id;
       }
-      return copy;
+      // Remove undefined, null, and empty string values
+      const filtered = {};
+      for (const [key, value] of Object.entries(copy)) {
+        if (value !== undefined && value !== null && value !== '') {
+          filtered[key] = value;
+        }
+      }
+      // Convert camelCase to snake_case
+      const snakeCaseRow = {};
+      for (const [key, value] of Object.entries(filtered)) {
+        snakeCaseRow[camelToSnake(key)] = value;
+      }
+      return snakeCaseRow;
     });
 
     const columns = Object.keys(preparedData[0]);
@@ -911,7 +1173,15 @@ app.post('/api/:table', authenticateToken, async (req, res) => {
       RETURNING *
     `;
     const result = await client.query(query, flatValues);
-    res.json({ data: result.rows, error: null });
+    // Convert snake_case back to camelCase in response
+    const camelCaseRows = result.rows.map(row => {
+      const camelRow = {};
+      for (const [key, value] of Object.entries(row)) {
+        camelRow[snakeToCamel(key)] = value;
+      }
+      return camelRow;
+    });
+    res.json({ data: camelCaseRows, error: null });
   } catch (error) {
     console.error('Insert error:', error);
     res.status(500).json({ data: null, error: error.message });
@@ -937,15 +1207,26 @@ app.patch('/api/:table', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Both data and filters are required' });
     }
     
-    const columns = Object.keys(data);
+    // Convert camelCase to snake_case in data and filters
+    const snakeCaseData = {};
+    for (const [key, value] of Object.entries(data)) {
+      snakeCaseData[camelToSnake(key)] = value;
+    }
+    
+    const snakeCaseFilters = {};
+    for (const [key, value] of Object.entries(filters)) {
+      snakeCaseFilters[camelToSnake(key)] = value;
+    }
+    
+    const columns = Object.keys(snakeCaseData);
     if (columns.some((c) => !isSafeIdentifier(c))) {
       return res.status(400).json({ data: null, error: 'Invalid column name' });
     }
     const setClause = columns.map((col, idx) => `${col} = $${idx + 1}`).join(', ');
-    const values = [...columns.map(col => data[col])];
+    const values = [...columns.map(col => snakeCaseData[col])];
     
     // Add WHERE clause
-    const filterKeys = Object.keys(filters);
+    const filterKeys = Object.keys(snakeCaseFilters);
     for (const k of filterKeys) {
       if (!isSafeIdentifier(k)) {
         return res.status(400).json({ data: null, error: `Invalid filter key: ${k}` });
@@ -955,7 +1236,7 @@ app.patch('/api/:table', authenticateToken, async (req, res) => {
     // Enforce user ownership for user-scoped tables
     const whereClauses = [];
     const baseWhere = filterKeys.map((key, idx) => {
-      values.push(filters[key]);
+      values.push(snakeCaseFilters[key]);
       return `${key} = $${columns.length + idx + 1}`;
     });
     whereClauses.push(...baseWhere);
@@ -973,11 +1254,20 @@ app.patch('/api/:table', authenticateToken, async (req, res) => {
     const result = await client.query(query, values);
     
     // Clear cache if updating user settings
-    if (table === 'users' && data.settings && filters.id) {
-      clearCachedSettings(filters.id);
+    if (table === 'users' && snakeCaseData.settings && snakeCaseFilters.id) {
+      clearCachedSettings(snakeCaseFilters.id);
     }
     
-    res.json({ data: result.rows, error: null });
+    // Convert snake_case back to camelCase in response
+    const camelCaseRows = result.rows.map(row => {
+      const camelRow = {};
+      for (const [key, value] of Object.entries(row)) {
+        camelRow[snakeToCamel(key)] = value;
+      }
+      return camelRow;
+    });
+    
+    res.json({ data: camelCaseRows, error: null });
   } catch (error) {
     console.error('Update error:', error);
     res.status(500).json({ data: null, error: error.message });

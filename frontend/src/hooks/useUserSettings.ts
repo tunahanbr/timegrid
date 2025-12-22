@@ -21,6 +21,7 @@ const defaultSettings: UserSettings = {
     theme: 'dark',
     defaultView: 'timer',
     weekStart: 'monday',
+    timeFormat: '12h', // 12h or 24h
   },
   onboardingCompleted: false,
   userMode: 'freelancer',

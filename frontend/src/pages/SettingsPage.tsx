@@ -6,6 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { useState, useEffect } from "react";
 import { useUserSettings } from "@/hooks/useUserSettings";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import IcalConnect from "@/components/integrations/IcalConnect";
+import CalendarFeeds from "@/components/integrations/CalendarFeeds";
+import CalendarsManager from "@/components/integrations/CalendarsManager";
 
 const PERSONAL_FEATURES = {
   clients: true,
@@ -24,6 +28,7 @@ const PERSONAL_FEATURES = {
 export default function SettingsPage() {
   const { settings, isLoading, updateSettings, isUpdating } = useUserSettings();
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [timeFormat, setTimeFormat] = useState<'12h' | '24h'>('12h');
   const [hasChanges, setHasChanges] = useState(false);
 
   // Load settings from Supabase when available
@@ -32,6 +37,9 @@ export default function SettingsPage() {
       const nextTheme = settings.preferences?.theme === 'light' ? 'light' : 'dark';
       setTheme(nextTheme);
       document.documentElement.classList.toggle('dark', nextTheme === 'dark');
+
+      const format = (settings.preferences?.timeFormat as '12h' | '24h') || '12h';
+      setTimeFormat(format);
 
       if (settings.userMode !== 'personal') {
         setHasChanges(true);
@@ -60,6 +68,7 @@ export default function SettingsPage() {
           theme: theme,
           defaultView: settings?.preferences?.defaultView || 'timer',
           weekStart: settings?.preferences?.weekStart || 'monday',
+          timeFormat: timeFormat,
         },
         userMode: 'personal',
       });
@@ -132,6 +141,39 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-6">
+        {/* Calendars Management */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Your Calendars</CardTitle>
+            <CardDescription>Create dedicated calendars to organize your time entries and generate separate ICS feeds</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CalendarsManager />
+          </CardContent>
+        </Card>
+
+        {/* Calendar Feeds (Export) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Calendar Feeds</CardTitle>
+            <CardDescription>Export your time entries as ICS feeds for Google, Apple, or Outlook calendars</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CalendarFeeds />
+          </CardContent>
+        </Card>
+
+        {/* External Calendars (Import) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>External Calendars</CardTitle>
+            <CardDescription>Subscribe to iCal feeds from Apple, Google, or other calendar services to overlay them on your calendar</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <IcalConnect />
+          </CardContent>
+        </Card>
+
         {/* Appearance */}
         <Card>
           <CardHeader>
@@ -140,7 +182,7 @@ export default function SettingsPage() {
               Customize the look and feel
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-medium">Theme</div>
@@ -168,6 +210,32 @@ export default function SettingsPage() {
                 )}
                 <span className="sr-only">Toggle theme</span>
               </Button>
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">Time Format</div>
+                <div className="text-sm text-muted-foreground">
+                  Choose between 12-hour (AM/PM) or 24-hour format
+                </div>
+              </div>
+              <Select
+                value={timeFormat}
+                onValueChange={(value) => {
+                  setTimeFormat(value as '12h' | '24h');
+                  setHasChanges(true);
+                }}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="12h">12-hour (AM/PM)</SelectItem>
+                  <SelectItem value="24h">24-hour</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>

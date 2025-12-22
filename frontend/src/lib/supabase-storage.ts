@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/db/client";
 export interface TimeEntry {
   id: string;
   projectId: string;
+  calendarId?: string | null;
   description: string;
   tags: string[];
   duration: number;
@@ -75,6 +76,7 @@ export interface UserSettings {
     theme: 'light' | 'dark' | 'system';
     defaultView: 'timer' | 'entries' | 'projects';
     weekStart: 'monday' | 'sunday';
+    timeFormat: '12h' | '24h';
   };
   onboardingCompleted: boolean;
   userMode: 'personal' | 'freelancer' | 'team';
@@ -240,15 +242,23 @@ export const supabaseStorage = {
     });
 
     // Map entries with their tags
+    // Note: Backend already converts snake_case to camelCase
     const entriesWithTags = (data || []).map((e: any) => ({
       id: e.id,
-      projectId: e.project_id,
+      projectId: e.projectId,
+      calendarId: e.calendarId ?? e.calendar_id ?? null,
       description: e.description || "",
       duration: e.duration,
-      date: e.start_time || e.date, // Use start_time as the date
+      date: e.startTime || e.date, // Use startTime as the date
+      startTime: e.startTime,
+      endTime: e.endTime,
       tags: entryTagsMap.get(e.id) || [],
-      createdAt: e.created_at,
-      userId: e.user_id,
+      createdAt: e.createdAt,
+      userId: e.userId,
+      isBillable: e.isBillable,
+      isRecurring: e.isRecurring,
+      recurrenceRule: e.recurrenceRule,
+      parentEntryId: e.parentEntryId,
     }));
 
     return entriesWithTags;
@@ -265,11 +275,15 @@ export const supabaseStorage = {
       .insert({
         user_id: userId,
         project_id: entry.projectId,
+        calendar_id: entry.calendarId || null,
         description: entry.description,
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
         duration: entry.duration,
         is_billable: entry.isBillable !== undefined ? entry.isBillable : true,
+        is_recurring: entry.isRecurring || false,
+        recurrence_rule: entry.recurrenceRule || null,
+        parent_entry_id: entry.parentEntryId || null,
       })
       .select("*")
       .single();
@@ -329,12 +343,19 @@ export const supabaseStorage = {
     return {
       id: insertedEntry.id,
       projectId: insertedEntry.project_id,
+      calendarId: insertedEntry.calendar_id,
       description: insertedEntry.description || "",
       duration: insertedEntry.duration,
       date: insertedEntry.start_time || entry.date,
       tags: entry.tags || [],
       createdAt: insertedEntry.created_at,
       userId: insertedEntry.user_id,
+      startTime: insertedEntry.start_time,
+      endTime: insertedEntry.end_time,
+      isBillable: insertedEntry.is_billable,
+      isRecurring: insertedEntry.is_recurring,
+      recurrenceRule: insertedEntry.recurrence_rule,
+      parentEntryId: insertedEntry.parent_entry_id,
     };
   },
 
@@ -345,6 +366,7 @@ export const supabaseStorage = {
         description: updates.description,
         duration: updates.duration,
         project_id: updates.projectId,
+        calendar_id: updates.calendarId,
       })
       .eq("id", id);
     
