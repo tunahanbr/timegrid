@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Production-ready logging utility
 // Only logs in development mode, silent in production
 

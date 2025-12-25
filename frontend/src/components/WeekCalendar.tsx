@@ -12,7 +12,7 @@ import { useExternalEvents } from '@/hooks/useExternalEvents';
 import type { ExternalEvent } from '@/lib/external-events';
 import { useCalendars } from '@/hooks/useCalendars';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useExternalCalendarsContext } from '@/contexts/ExternalCalendarsContext';
+import { useExternalCalendarsContext } from '@/contexts/useExternalCalendarsContext';
 
 interface WeekCalendarProps {
   entries: TimeEntry[];
@@ -260,8 +260,8 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
           if (!isWithinInterval(occ, { start: weekStart, end: weekEnd })) return;
           const dayKey = format(occ, 'yyyy-MM-dd');
 
-          let startHour = occ.getHours();
-          let startMinute = occ.getMinutes();
+          const startHour = occ.getHours();
+          const startMinute = occ.getMinutes();
 
           const totalMinutesFromStart = (startHour - HOUR_START) * 60 + startMinute;
           const topPercent = (totalMinutesFromStart / ((HOUR_END - HOUR_START) * 60)) * 100;

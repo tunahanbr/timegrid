@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabaseStorage, Client } from "@/lib/supabase-storage";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { toast } from "sonner";
 import { offlineSync } from "@/lib/offline-sync";
 import { offlineStorage } from "@/lib/offline-storage";

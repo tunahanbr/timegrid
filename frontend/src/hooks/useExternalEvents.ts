@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { TimeRange, ExternalEvent, ExternalSource } from '@/lib/external-events';
-import { useExternalCalendarsContext, type IcalCalendar } from '@/contexts/ExternalCalendarsContext';
+import { useExternalCalendarsContext, type IcalCalendar } from '@/contexts/useExternalCalendarsContext';
 
 export function useExternalEvents() {
   const ctx = useExternalCalendarsContext();

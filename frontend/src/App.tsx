@@ -17,7 +17,7 @@ import { storage } from "@/lib/storage";
 import { useEffect, useState } from "react";
 import { formatDurationShort } from "@/lib/utils-time";
 import { initializeApp } from "@/lib/init";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { Button } from "@/components/ui/button";
 import { LogOut, Loader2, X } from "lucide-react";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -138,7 +138,7 @@ const AppRoutes = ({ children }: { children: React.ReactNode }) => {
           >
             <div className={isMobile ? "flex items-center gap-3" : "flex items-center gap-6"}>
               {/* Space for native macOS traffic lights */}
-              {typeof window !== 'undefined' && (window as any).__TAURI__ && (
+              {typeof window !== 'undefined' && (window as { __TAURI__?: unknown }).__TAURI__ && (
                 <div className="w-20 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties} />
               )}
               <SidebarTrigger aria-label="Toggle navigation menu" />

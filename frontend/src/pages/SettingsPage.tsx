@@ -73,9 +73,10 @@ export default function SettingsPage() {
         userMode: 'personal',
       });
       setHasChanges(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save settings';
       console.error("Error saving settings:", error);
-      toast.error(error.message || "Failed to save settings");
+      toast.error(message);
     }
   };
 

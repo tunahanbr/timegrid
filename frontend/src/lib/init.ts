@@ -39,7 +39,9 @@ export function getApiUrl(): string {
     if (url) {
       return url.replace(/\/$/, '');
     }
-  } catch {}
+  } catch (err) {
+    logger.debug('Failed to read API URL override from storage', err);
+  }
   return API_URL;
 }
 
@@ -55,8 +57,8 @@ export function setApiUrlOverride(url: string | null): string {
     const normalized = parsed.toString().replace(/\/$/, '');
     localStorage.setItem(API_URL_OVERRIDE_KEY, normalized);
     return normalized;
-  } catch {
-    // If invalid, keep existing
+  } catch (err) {
+    logger.debug('Invalid API URL override', err);
     return getApiUrl();
   }
 }
@@ -64,7 +66,9 @@ export function setApiUrlOverride(url: string | null): string {
 export function clearApiUrlOverride(): void {
   try {
     localStorage.removeItem(API_URL_OVERRIDE_KEY);
-  } catch {}
+  } catch (err) {
+    logger.debug('Failed to clear API URL override', err);
+  }
 }
 
 export const initializeApp = async () => {

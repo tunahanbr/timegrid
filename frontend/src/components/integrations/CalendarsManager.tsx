@@ -40,8 +40,9 @@ export default function CalendarsManager() {
         toast.success('Calendar created');
       }
       resetForm();
-    } catch (err: any) {
-      toast.error(err?.message || 'Unable to save calendar');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unable to save calendar';
+      toast.error(message);
     }
   };
 
@@ -57,8 +58,9 @@ export default function CalendarsManager() {
       await deleteCalendarAsync(id);
       toast.success('Calendar deleted');
       if (editing === id) resetForm();
-    } catch (err: any) {
-      toast.error(err?.message || 'Unable to delete calendar');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unable to delete calendar';
+      toast.error(message);
     }
   };
 

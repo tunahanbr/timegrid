@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { useProjects } from '@/hooks/useProjects';
 import { useCalendars } from '@/hooks/useCalendars';
 import { getApiUrl } from '@/lib/init';
@@ -10,7 +10,19 @@ import { Copy } from 'lucide-react';
 function copy(text: string) {
   try {
     navigator.clipboard.writeText(text);
-  } catch {}
+  } catch (err) {
+    console.warn('Failed to copy to clipboard', err);
+  }
+}
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return 'Unknown error';
+  }
 }
 
 export default function CalendarFeeds() {
@@ -41,8 +53,8 @@ export default function CalendarFeeds() {
         const data = await res.json();
         const settings = data?.data?.[0]?.settings;
         if (settings?.exportIcsToken) setToken(settings.exportIcsToken);
-      } catch (e: any) {
-        setError(e?.message || 'Failed to load calendar feed settings');
+      } catch (e: unknown) {
+        setError(getErrorMessage(e) || 'Failed to load calendar feed settings');
       }
     };
     load();
@@ -63,8 +75,8 @@ export default function CalendarFeeds() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to generate token');
       setToken(data.token);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to generate token');
+    } catch (e: unknown) {
+      setError(getErrorMessage(e) || 'Failed to generate token');
     } finally {
       setLoading(false);
     }

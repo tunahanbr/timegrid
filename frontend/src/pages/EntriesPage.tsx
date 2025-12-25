@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { formatDurationShort, formatDate } from "@/lib/utils-time";
 import { Trash2, Loader2, AlertCircle, Calendar, Download, CheckSquare, Square, Edit3, X, CloudOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,10 @@ import type { TimeEntry } from "@/lib/supabase-storage";
 import { Badge } from "@/components/ui/badge";
 import { useTags } from "@/hooks/useTags";
 import { useIsMobile } from "@/hooks/use-mobile";
+
+function hasPostgrestCode(err: unknown): err is { code?: string } {
+  return typeof err === 'object' && err !== null && 'code' in err;
+}
 
 export default function EntriesPage() {
   const isMobile = useIsMobile();
@@ -229,8 +234,27 @@ export default function EntriesPage() {
     return filteredEntries.reduce((sum, entry) => sum + entry.duration, 0);
   }, [filteredEntries]);
 
-  const isDatabaseError = entriesError && (entriesError.message?.includes('404') || (entriesError as any).code === 'PGRST116');
+  const isDatabaseError = entriesError && (entriesError.message?.includes('404') || (hasPostgrestCode(entriesError) && entriesError.code === 'PGRST116'));
   const isLoading = isLoadingEntries || isLoadingProjects;
+
+  // Flatten rows for virtualization: headers + entries
+  const rows = useMemo(() => {
+    const out: Array<{ type: 'header'; date: string } | { type: 'entry'; date: string; entry: TimeEntry }> = [];
+    for (const date of sortedDates) {
+      out.push({ type: 'header', date });
+      const dayEntries = groupedEntries[date] || [];
+      for (const entry of dayEntries) {
+        out.push({ type: 'entry', date, entry });
+      }
+    }
+    return out;
+  }, [sortedDates, groupedEntries]);
+
+  const virtualizer = useWindowVirtualizer({
+    count: rows.length,
+    estimateSize: (index) => (rows[index].type === 'header' ? 48 : 72),
+    overscan: 12,
+  });
 
   return (
     <div className="container mx-auto px-4 sm:px-8 py-8">
@@ -342,110 +366,101 @@ export default function EntriesPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-8">
-            {sortedDates.map((date) => {
-            const dayEntries = groupedEntries[date];
-            const dayTotal = getDayTotal(dayEntries);
-            const dayBillable = dayEntries.reduce((sum, entry) => {
-              const project = projects.find(p => p.id === entry.projectId);
-              if (project?.hourlyRate) {
-                return sum + (entry.duration / 3600) * project.hourlyRate;
-              }
-              return sum;
-            }, 0);
-
-            return (
-              <div key={date} className="space-y-2">
-                <div className="flex items-center justify-between border-b border-border pb-2">
-                  <h2 className="text-lg font-semibold">{formatDate(date)}</h2>
-                  <span className="text-sm text-muted-foreground font-mono">
-                    {formatDurationShort(dayTotal)}
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  {dayEntries.map((entry, index) => {
-                    const project = projects.find(p => p.id === entry.projectId);
-                    const isSelected = selectedEntries.has(entry.id);
-                    
-                    return (
+          <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+            {virtualizer.getVirtualItems().map((item) => {
+              const row = rows[item.index];
+              if (row.type === 'header') {
+                const dayEntries = groupedEntries[row.date] || [];
+                const dayTotal = getDayTotal(dayEntries);
+                return (
+                  <div key={item.key} style={{ position: 'absolute', top: item.start, height: item.size, left: 0, right: 0 }} className="space-y-2">
+                    <div className="flex items-center justify-between border-b border-border pb-2">
+                      <h2 className="text-lg font-semibold">{formatDate(row.date)}</h2>
+                      <span className="text-sm text-muted-foreground font-mono">
+                        {formatDurationShort(dayTotal)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              } else {
+                const entry = row.entry;
+                const project = projects.find(p => p.id === entry.projectId);
+                const isSelected = selectedEntries.has(entry.id);
+                return (
+                  <div key={item.key} style={{ position: 'absolute', top: item.start, height: item.size, left: 0, right: 0 }}>
+                    <div
+                      className={cn(
+                        "group flex items-center gap-4 p-2 sm:p-3 rounded hover:bg-surface transition-colors select-none sm:select-text",
+                        isSelected && "bg-surface sm:ring-2 sm:ring-primary"
+                      )}
+                    >
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => {
+                          const newSelected = new Set(selectedEntries);
+                          if (checked) {
+                            newSelected.add(entry.id);
+                          } else {
+                            newSelected.delete(entry.id);
+                          }
+                          setSelectedEntries(newSelected);
+                        }}
+                      />
                       <div
-                        key={entry.id}
-                        className={cn(
-                          "group flex items-center gap-4 p-2 sm:p-3 rounded hover:bg-surface transition-colors animate-slide-in select-none sm:select-text",
-                          isSelected && "bg-surface sm:ring-2 sm:ring-primary"
-                        )}
-                        style={{ animationDelay: `${index * 30}ms` }}
-                      >
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={(checked) => {
-                            const newSelected = new Set(selectedEntries);
-                            if (checked) {
-                              newSelected.add(entry.id);
-                            } else {
-                              newSelected.delete(entry.id);
-                            }
-                            setSelectedEntries(newSelected);
-                          }}
-                        />
-                        <div
-                          className="w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: project?.color || '#888' }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div className="font-medium text-sm">
-                              {entry.description || "No description"}
-                            </div>
-                            {(entry as any).isOffline && (
-                              <Badge variant="outline" className="text-xs gap-1">
-                                <CloudOff className="h-3 w-3" />
-                                Not synced
-                              </Badge>
-                            )}
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: project?.color || '#888' }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium text-sm">
+                            {entry.description || "No description"}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {project?.name || "Unknown project"}
-                            {entry.tags.length > 0 && (
-                              <span className="ml-2">
-                                {entry.tags.map(tag => `#${tag}`).join(' ')}
-                              </span>
-                            )}
-                          </div>
+                          {entry.isOffline && (
+                            <Badge variant="outline" className="text-xs gap-1">
+                              <CloudOff className="h-3 w-3" />
+                              Not synced
+                            </Badge>
+                          )}
                         </div>
-                        <div className="text-right flex-shrink-0">
-                          <div className="font-mono text-sm">
-                            {formatDurationShort(entry.duration)}
-                          </div>
+                        <div className="text-xs text-muted-foreground">
+                          {project?.name || "Unknown project"}
+                          {entry.tags.length > 0 && (
+                            <span className="ml-2">
+                              {entry.tags.map(tag => `#${tag}`).join(' ')}
+                            </span>
+                          )}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEditDialog(entry)}
-                          className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0"
-                          title="Edit entry"
-                          aria-label={`Edit time entry for ${project?.name || 'Unknown project'}`}
-                        >
-                          <Edit3 className="h-4 w-4" aria-hidden="true" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteEntry(entry.id)}
-                          className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0"
-                          title="Delete entry"
-                          aria-label={`Delete time entry for ${project?.name || 'Unknown project'}`}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
-                        </Button>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+                      <div className="text-right flex-shrink-0">
+                        <div className="font-mono text-sm">
+                          {formatDurationShort(entry.duration)}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditDialog(entry)}
+                        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0"
+                        title="Edit entry"
+                        aria-label={`Edit time entry for ${project?.name || 'Unknown project'}`}
+                      >
+                        <Edit3 className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deleteEntry(entry.id)}
+                        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0"
+                        title="Delete entry"
+                        aria-label={`Delete time entry for ${project?.name || 'Unknown project'}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+            })}
           </div>
         )}
       </div>

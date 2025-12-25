@@ -55,8 +55,9 @@ export function IcalConnect() {
       const newCalendarUrls = [...icalCalendars.map(c => c.url), trimmed];
       const events = await syncIcalFeeds(newCalendarUrls, range);
       setEventsForSource('ical', events, new Date().toISOString());
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to sync iCal feeds');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to sync iCal feeds';
+      setError(message);
     } finally {
       setIsSyncing(false);
     }
@@ -70,8 +71,9 @@ export function IcalConnect() {
       const urls = icalCalendars.map(c => c.url);
       const events = await syncIcalFeeds(urls, range);
       setEventsForSource('ical', events, new Date().toISOString());
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to sync iCal feeds');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to sync iCal feeds';
+      setError(message);
     } finally {
       setIsSyncing(false);
     }

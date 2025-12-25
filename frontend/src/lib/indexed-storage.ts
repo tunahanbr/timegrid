@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * IndexedDB Storage Layer with localStorage fallback
  * 

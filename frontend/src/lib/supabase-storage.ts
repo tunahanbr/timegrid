@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from "@/integrations/db/client";
 
 export interface TimeEntry {
@@ -16,6 +17,7 @@ export interface TimeEntry {
   isRecurring?: boolean;
   recurrenceRule?: string; // RFC 5545 RRULE format
   parentEntryId?: string;
+  isOffline?: boolean;
 }
 
 export interface Project {
@@ -177,7 +179,7 @@ export const supabaseStorage = {
 
     console.log('[getEntries] Fetching entries for user:', userId);
 
-    let query = supabase
+    const query = supabase
       .from("time_entries")
       .select("*")  // Simplified - no nested joins for now
       .eq("user_id", userId)
@@ -219,7 +221,7 @@ export const supabaseStorage = {
     const allTagIds = [...new Set((entryTagsResponse.data || []).map((et: any) => et.tag_id))];
     
     // Fetch all tags in one query
-    let tagsMap = new Map<string, string>();
+    const tagsMap = new Map<string, string>();
     if (allTagIds.length > 0) {
       const tagsResponse = await supabase
         .from("tags")

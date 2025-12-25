@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { getApiUrl } from '@/lib/init';
 
 export interface APIKey {
@@ -45,7 +46,7 @@ export function useAPIKeys() {
         name: k.name ?? null,
         created_at: k.created_at,
         last_used_at: k.last_used_at ?? null,
-        is_active: !Boolean(k.revoked_at),
+        is_active: !k.revoked_at,
       })) as APIKey[];
     },
     staleTime: 30000,
@@ -110,7 +111,7 @@ export function useAPIKeys() {
         name: k.name ?? null,
         created_at: k.created_at,
         last_used_at: k.last_used_at ?? null,
-        is_active: !Boolean(k.revoked_at),
+        is_active: !k.revoked_at,
       };
       return updated;
     },

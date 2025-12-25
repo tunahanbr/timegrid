@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Local storage for offline data using Tauri filesystem
 // Stores unsynced data locally with no size limits
 

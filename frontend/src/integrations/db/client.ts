@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Browser-compatible client that communicates with backend API
 // Provides Supabase-compatible interface
 

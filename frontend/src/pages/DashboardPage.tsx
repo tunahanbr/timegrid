@@ -1,28 +1,29 @@
-import { useMemo } from "react";
+import { useMemo, lazy, Suspense, useState } from "react";
 import { useTimeEntries } from "@/hooks/useTimeEntries";
 import { useProjects } from "@/hooks/useProjects";
 import { useTags } from "@/hooks/useTags";
 import { formatDurationShort } from "@/lib/utils-time";
-import { TimelineChart } from "@/components/charts/TimelineChart";
-import { ProjectDistributionChart } from "@/components/charts/ProjectDistributionChart";
-import { TagBreakdownChart } from "@/components/charts/TagBreakdownChart";
-import { ContributionHeatmap } from "@/components/ContributionHeatmap";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Calendar, Clock, TrendingUp, Folder, AlertCircle, Hash, Zap, Flame } from "lucide-react";
 import { format, subDays, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, formatISO, isWithinInterval, getDay } from "date-fns";
-import { useState } from "react";
+
+const TimelineChart = lazy(() => import("@/components/charts/TimelineChart").then((mod) => ({ default: mod.TimelineChart })));
+const ProjectDistributionChart = lazy(() => import("@/components/charts/ProjectDistributionChart").then((mod) => ({ default: mod.ProjectDistributionChart })));
+const TagBreakdownChart = lazy(() => import("@/components/charts/TagBreakdownChart").then((mod) => ({ default: mod.TagBreakdownChart })));
+const ContributionHeatmap = lazy(() => import("@/components/ContributionHeatmap").then((mod) => ({ default: mod.ContributionHeatmap })));
 
 export default function DashboardPage() {
   const { entries, isLoading: entriesLoading, error: entriesError } = useTimeEntries();
   const { projects, isLoading: projectsLoading, error: projectsError } = useProjects();
   const { tags, isLoading: tagsLoading } = useTags();
   const [timeRange, setTimeRange] = useState<"week" | "month">("week");
+  const chartFallback = <Skeleton className="h-64 w-full" />;
 
   // Calculate date ranges - MUST be before any conditional returns
-  const today = new Date();
+  const today = useMemo(() => new Date(), []);
   const weekStart = startOfWeek(today, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
   const monthStart = subDays(today, 30);
@@ -213,7 +214,7 @@ export default function DashboardPage() {
   // Loading state - MUST be after all hooks
   if (entriesLoading || projectsLoading || tagsLoading) {
     return (
-      <div className="container mx-auto px-8 py-8">
+      <div className="container mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <Skeleton className="h-8 w-48" />
@@ -240,7 +241,7 @@ export default function DashboardPage() {
   // Error state - MUST be after all hooks
   if (entriesError || projectsError) {
     return (
-      <div className="container mx-auto px-8 py-8">
+      <div className="container mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8 py-8">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
@@ -252,7 +253,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="container mx-auto px-8 py-8">
+    <div className="container mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-2">Overview of your time tracking</p>
@@ -324,7 +325,9 @@ export default function DashboardPage() {
           <CardDescription>Track your consistency over the past year</CardDescription>
         </CardHeader>
         <CardContent>
-          <ContributionHeatmap entries={entries || []} showLabel={true} />
+          <Suspense fallback={chartFallback}>
+            <ContributionHeatmap entries={entries || []} showLabel={true} />
+          </Suspense>
         </CardContent>
       </Card>
 
@@ -336,14 +339,16 @@ export default function DashboardPage() {
             <CardDescription>Daily time tracked over {timeRange === "week" ? "this week" : "the last 30 days"}</CardDescription>
           </CardHeader>
           <CardContent>
-            <TimelineChart 
-              data={dailyData.map((d) => ({
-                date: d.date,
-                hours: d.hours,
-                billableHours: 0,
-                revenue: 0,
-              }))}
-            />
+            <Suspense fallback={chartFallback}>
+              <TimelineChart 
+                data={dailyData.map((d) => ({
+                  date: d.date,
+                  hours: d.hours,
+                  billableHours: 0,
+                  revenue: 0,
+                }))}
+              />
+            </Suspense>
           </CardContent>
         </Card>
 
@@ -354,14 +359,16 @@ export default function DashboardPage() {
             <CardDescription>Time breakdown by project</CardDescription>
           </CardHeader>
           <CardContent>
-            <ProjectDistributionChart 
-              data={projectData.map((p) => ({
-                name: p.name,
-                hours: p.hours,
-                percentage: totalTime > 0 ? Math.round((p.time / totalTime) * 100) : 0,
-                color: p.color,
-              }))}
-            />
+            <Suspense fallback={chartFallback}>
+              <ProjectDistributionChart 
+                data={projectData.map((p) => ({
+                  name: p.name,
+                  hours: p.hours,
+                  percentage: totalTime > 0 ? Math.round((p.time / totalTime) * 100) : 0,
+                  color: p.color,
+                }))}
+              />
+            </Suspense>
           </CardContent>
         </Card>
       </div>
@@ -415,7 +422,9 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {tagData.length > 0 ? (
-              <TagBreakdownChart data={tagData} />
+              <Suspense fallback={chartFallback}>
+                <TagBreakdownChart data={tagData} />
+              </Suspense>
             ) : (
               <div className="text-center py-8 text-muted-foreground">No tags used</div>
             )}

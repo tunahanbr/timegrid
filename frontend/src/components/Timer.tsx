@@ -89,7 +89,7 @@ export function Timer() {
     });
   }, []);
 
-  const startTimer = () => {
+  const startTimer = useCallback(() => {
     if (!timerState.currentProjectId) {
       toast.error("Please select a project first");
       return;
@@ -105,9 +105,9 @@ export function Timer() {
     };
     setTimerState(newState);
     storage.saveTimerState(newState);
-  };
+  }, [description, timerState.currentProjectId]);
 
-  const pauseTimer = () => {
+  const pauseTimer = useCallback(() => {
     const newState: TimerState = {
       ...timerState,
       isPaused: true,
@@ -116,9 +116,9 @@ export function Timer() {
     };
     setTimerState(newState);
     storage.saveTimerState(newState);
-  };
+  }, [currentTime, timerState]);
 
-  const resumeTimer = () => {
+  const resumeTimer = useCallback(() => {
     const newState: TimerState = {
       ...timerState,
       isPaused: false,
@@ -126,7 +126,7 @@ export function Timer() {
     };
     setTimerState(newState);
     storage.saveTimerState(newState);
-  };
+  }, [timerState]);
 
   const stopTimer = () => {
     if (currentTime < 1) {
@@ -229,7 +229,7 @@ export function Timer() {
     } else if (isPaused) {
       resumeTimer();
     }
-  }, [isIdle, isRunning, isPaused]);
+  }, [isIdle, isRunning, isPaused, startTimer, pauseTimer, resumeTimer]);
 
   useTauriEvents(handleToggleTimer);
 

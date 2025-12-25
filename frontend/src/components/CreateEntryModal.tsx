@@ -228,7 +228,7 @@ export function CreateEntryModal({
             </div>
 
             {isRecurring && (
-              <Select value={recurrenceType} onValueChange={(value: any) => setRecurrenceType(value)} disabled={isSaving}>
+              <Select value={recurrenceType} onValueChange={(value: "daily" | "weekly" | "monthly") => setRecurrenceType(value)} disabled={isSaving}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>

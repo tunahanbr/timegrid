@@ -23,7 +23,10 @@ export default function MonthCalendar({ entries, projects }: MonthCalendarProps)
       try {
         const d = format(parseISO(e.startTime || e.date), 'yyyy-MM-dd');
         if (map[d]) map[d].push(e);
-      } catch {}
+      } catch (err) {
+        // Ignore malformed dates while building calendar map
+        console.debug('Skipping malformed entry date', err);
+      }
     }
     return map;
   }, [days, entries]);

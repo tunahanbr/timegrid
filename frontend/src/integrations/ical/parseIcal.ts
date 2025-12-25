@@ -1,6 +1,23 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import IcalExpander from 'ical-expander';
 import type { ExternalEvent, TimeRange } from '@/lib/external-events';
 import { getApiUrl } from '@/lib/init';
+
+// In-memory cache for parsed events by URL + range
+const cache = new Map<string, ExternalEvent[]>();
+
+let worker: Worker | null = null;
+function getWorker(): Worker | null {
+  try {
+    if (!worker) {
+      worker = new Worker(new URL('../../workers/icalWorker.ts', import.meta.url), { type: 'module' });
+    }
+    return worker;
+  } catch (err) {
+    console.warn('iCal worker unavailable, falling back to main thread parsing', err);
+    return null;
+  }
+}
 
 function safeText(v: any): string | undefined {
   if (v == null) return undefined;
@@ -17,7 +34,9 @@ export async function fetchIcsText(url: string): Promise<string> {
   try {
     const token = localStorage.getItem('auth_token');
     if (token) headers['Authorization'] = `Bearer ${token}`;
-  } catch {}
+  } catch (err) {
+    console.warn('Failed to read auth token for ICS proxy request', err);
+  }
   const res = await fetch(proxied, { headers, credentials: 'include' as RequestCredentials });
   if (!res.ok) throw new Error(`Proxy failed (${res.status})`);
   return await res.text();
@@ -25,8 +44,28 @@ export async function fetchIcsText(url: string): Promise<string> {
 
 export async function parseIcsToExternalEvents(url: string, range: TimeRange): Promise<ExternalEvent[]> {
   const ics = await fetchIcsText(url);
-  const expander = new IcalExpander({ ics, maxIterations: 2000 });
+  const key = `${url}|${range.start.getTime()}|${range.end.getTime()}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
 
+  const w = getWorker();
+  if (w) {
+    const result = await new Promise<{ events?: ExternalEvent[]; error?: string }>((resolve) => {
+      const onMessage = (ev: MessageEvent) => {
+        resolve(ev.data as { events?: ExternalEvent[]; error?: string });
+        w.removeEventListener('message', onMessage);
+      };
+      w.addEventListener('message', onMessage);
+      w.postMessage({ ics, startTs: range.start.getTime(), endTs: range.end.getTime(), url });
+    });
+    if (result.error) throw new Error(result.error);
+    const events = (result.events || []) as ExternalEvent[];
+    cache.set(key, events);
+    return events;
+  }
+
+  // Fallback: parse on main thread
+  const expander = new IcalExpander({ ics, maxIterations: 2000 });
   const { events, occurrences } = expander.between(range.start, range.end);
   const out: ExternalEvent[] = [];
 
@@ -87,5 +126,6 @@ export async function parseIcsToExternalEvents(url: string, range: TimeRange): P
     });
   }
 
+  cache.set(key, out);
   return out;
 }

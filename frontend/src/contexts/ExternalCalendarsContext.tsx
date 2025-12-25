@@ -118,7 +118,7 @@ interface ExternalCalendarsContextValue extends ExternalCalendarsState {
   getEventsInRange: (range: TimeRange) => ExternalEvent[];
 }
 
-const ExternalCalendarsContext = createContext<ExternalCalendarsContextValue | undefined>(undefined);
+export const ExternalCalendarsContext = createContext<ExternalCalendarsContextValue | undefined>(undefined);
 
 export const ExternalCalendarsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(reducer, initialState);
@@ -249,8 +249,3 @@ export const ExternalCalendarsProvider: React.FC<{ children: React.ReactNode }> 
   );
 };
 
-export function useExternalCalendarsContext(): ExternalCalendarsContextValue {
-  const ctx = useContext(ExternalCalendarsContext);
-  if (!ctx) throw new Error('useExternalCalendarsContext must be used within ExternalCalendarsProvider');
-  return ctx;
-}

@@ -50,7 +50,7 @@ export default function CalendarPage() {
           <p className="text-sm text-muted-foreground">Manage your time visually</p>
           <div className="flex items-center gap-2 ml-auto">
             <span className="text-xs text-muted-foreground">View</span>
-            <Select value={view} onValueChange={(v: any) => setView(v)}>
+            <Select value={view} onValueChange={(v: 'day' | 'week' | 'workweek' | 'month' | 'year') => setView(v)}>
               <SelectTrigger className="h-8 w-40">
                 <SelectValue />
               </SelectTrigger>

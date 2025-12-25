@@ -160,6 +160,10 @@ export function ContributionHeatmap({ entries, showLabel = true }: ContributionH
     };
   }, [heatmapData]);
 
+  const cellSize = 'clamp(10px, 1.8vw, 14px)';
+  const cellGap = 'clamp(4px, 1vw, 6px)';
+  const labelWidth = 'clamp(24px, 5vw, 32px)';
+
   return (
     <TooltipProvider>
       <div className="space-y-6 w-full">
@@ -204,15 +208,15 @@ export function ContributionHeatmap({ entries, showLabel = true }: ContributionH
           </div>
         )}
 
-        <div className="w-full pb-4">
-          <div className="w-full flex gap-3">
+        <div className="w-full pb-4 overflow-x-auto">
+          <div className="inline-flex w-full" style={{ gap: cellGap }}>
             {/* Left side: day labels */}
-            <div className="flex flex-col gap-1.5 pt-0 flex-shrink-0">
+            <div className="flex flex-col pt-0 flex-shrink-0" style={{ gap: cellGap, width: labelWidth }}>
               {dayLabels.map((label) => (
                 <div
                   key={label}
                   className="text-xs text-muted-foreground flex items-center justify-start font-medium"
-                  style={{ width: '32px', height: '16px' }}
+                  style={{ width: '100%', height: cellSize }}
                 >
                   {label}
                 </div>
@@ -220,9 +224,9 @@ export function ContributionHeatmap({ entries, showLabel = true }: ContributionH
             </div>
 
             {/* Main heatmap - grows to fill available space */}
-            <div className="flex gap-1.5 flex-1">
+            <div className="flex flex-1" style={{ gap: cellGap }}>
               {weeks.map((week, weekIndex) => (
-                <div key={weekIndex} className="flex flex-col gap-1.5 flex-shrink-0">
+                <div key={weekIndex} className="flex flex-col flex-shrink-0" style={{ gap: cellGap }}>
                   {week.map((day, dayIndex) => {
                     // Don't render placeholder blocks
                     if (!day.date) {
@@ -230,7 +234,7 @@ export function ContributionHeatmap({ entries, showLabel = true }: ContributionH
                         <div
                           key={`${weekIndex}-${dayIndex}`}
                           className="flex-shrink-0"
-                          style={{ width: '16px', height: '16px' }}
+                          style={{ width: cellSize, height: cellSize }}
                         />
                       );
                     }
@@ -242,8 +246,8 @@ export function ContributionHeatmap({ entries, showLabel = true }: ContributionH
                             className="rounded-sm cursor-pointer hover:ring-2 hover:ring-primary hover:ring-offset-1 transition-all flex-shrink-0"
                             style={{
                               backgroundColor: getColor(day.hours),
-                              width: '16px',
-                              height: '16px',
+                              width: cellSize,
+                              height: cellSize,
                             }}
                             role="img"
                             aria-label={`${day.hours.toFixed(1)}h on ${format(day.dateObj, 'MMM d, yyyy')}`}
@@ -266,14 +270,14 @@ export function ContributionHeatmap({ entries, showLabel = true }: ContributionH
           </div>
 
           {/* Legend */}
-          <div className="flex items-center gap-3 mt-6 text-xs text-muted-foreground pl-10">
+          <div className="flex items-center gap-3 mt-6 text-xs text-muted-foreground" style={{ paddingLeft: labelWidth }}>
             <span>Less</span>
-            <div className="flex gap-1.5">
-              <div className="rounded-sm" style={{ backgroundColor: '#ebedf0', width: '16px', height: '16px' }} />
-              <div className="rounded-sm" style={{ backgroundColor: '#c6e48b', width: '16px', height: '16px' }} />
-              <div className="rounded-sm" style={{ backgroundColor: '#7bc96f', width: '16px', height: '16px' }} />
-              <div className="rounded-sm" style={{ backgroundColor: '#239a3b', width: '16px', height: '16px' }} />
-              <div className="rounded-sm" style={{ backgroundColor: '#0d3817', width: '16px', height: '16px' }} />
+            <div className="flex" style={{ gap: cellGap }}>
+              <div className="rounded-sm" style={{ backgroundColor: '#ebedf0', width: cellSize, height: cellSize }} />
+              <div className="rounded-sm" style={{ backgroundColor: '#c6e48b', width: cellSize, height: cellSize }} />
+              <div className="rounded-sm" style={{ backgroundColor: '#7bc96f', width: cellSize, height: cellSize }} />
+              <div className="rounded-sm" style={{ backgroundColor: '#239a3b', width: cellSize, height: cellSize }} />
+              <div className="rounded-sm" style={{ backgroundColor: '#0d3817', width: cellSize, height: cellSize }} />
             </div>
             <span>More</span>
           </div>

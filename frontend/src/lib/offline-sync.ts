@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Offline sync system for Tauri app
 // Queues operations when offline and syncs when back online
 
