@@ -21,7 +21,7 @@ export function StorageInfo() {
       const info = await indexedStorage.getQuotaInfo();
       setQuotaInfo(info);
     } catch (error) {
-      console.error('Failed to load quota info:', error);
+      // Silent fail
     } finally {
       setLoading(false);
     }

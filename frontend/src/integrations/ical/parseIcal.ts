@@ -14,7 +14,6 @@ function getWorker(): Worker | null {
     }
     return worker;
   } catch (err) {
-    console.warn('iCal worker unavailable, falling back to main thread parsing', err);
     return null;
   }
 }
@@ -35,7 +34,7 @@ export async function fetchIcsText(url: string): Promise<string> {
     const token = localStorage.getItem('auth_token');
     if (token) headers['Authorization'] = `Bearer ${token}`;
   } catch (err) {
-    console.warn('Failed to read auth token for ICS proxy request', err);
+    // Silent fail
   }
   const res = await fetch(proxied, { headers, credentials: 'include' as RequestCredentials });
   if (!res.ok) throw new Error(`Proxy failed (${res.status})`);

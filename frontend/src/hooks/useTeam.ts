@@ -29,7 +29,6 @@ export function useTeam() {
       } catch (error: any) {
         // If database doesn't exist yet, return empty array
         if (error.code === 'PGRST116' || error.message?.includes('404')) {
-          console.warn('Database tables not set up yet. Run migration first.');
           return [];
         }
         throw error;

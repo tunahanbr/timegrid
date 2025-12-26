@@ -7,7 +7,6 @@ export async function syncIcalFeeds(urls: string[], range: TimeRange): Promise<E
       try {
         return await parseIcsToExternalEvents(u, range);
       } catch (err) {
-        console.warn('[iCal] Failed to sync feed', u, err);
         return [];
       }
     })

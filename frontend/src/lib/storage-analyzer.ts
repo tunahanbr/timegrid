@@ -32,7 +32,7 @@ export async function analyzeStorage(): Promise<StorageBreakdown[]> {
         
         totalSize += sizeInBytes;
       } catch (error) {
-        console.error(`Failed to analyze ${storeName}:`, error);
+        // Skip failed store
       }
     }
 
@@ -61,7 +61,7 @@ export async function analyzeStorage(): Promise<StorageBreakdown[]> {
       
       totalSize += localStorageSize;
     } catch (error) {
-      console.error('Failed to analyze localStorage:', error);
+      // Skip failed analysis
     }
 
     // Analyze Cache API (service workers, HTTP cache)
@@ -99,7 +99,7 @@ export async function analyzeStorage(): Promise<StorageBreakdown[]> {
         }
       }
     } catch (error) {
-      console.error('Failed to analyze Cache API:', error);
+      // Skip failed cache analysis
     }
 
     // Add note about unaccounted storage
@@ -128,7 +128,6 @@ export async function analyzeStorage(): Promise<StorageBreakdown[]> {
 
     return breakdown;
   } catch (error) {
-    console.error('Failed to analyze storage:', error);
     return [];
   }
 }

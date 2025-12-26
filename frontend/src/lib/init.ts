@@ -94,7 +94,6 @@ export const initializeApp = async () => {
         const projects = await supabaseStorage.getProjects();
         return projects.map(p => ({ id: p.id, name: p.name }));
       } catch (error) {
-        console.error('Failed to fetch projects for tray:', error);
         // Fallback to localStorage
         return storage.getProjects();
       }

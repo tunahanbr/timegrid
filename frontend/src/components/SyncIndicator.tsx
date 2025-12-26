@@ -20,7 +20,6 @@ export function SyncIndicator() {
 
   useEffect(() => {
     const unsubscribe = offlineSync.onStatusChange((status) => {
-      console.log('[SyncIndicator] Status update:', status);
       setSyncStatus(status);
     });
 
@@ -28,9 +27,6 @@ export function SyncIndicator() {
   }, []);
 
   const handleManualSync = () => {
-    console.log('[SyncIndicator] Manual sync triggered');
-    console.log('[SyncIndicator] Current queue size:', offlineSync.getQueueSize());
-    console.log('[SyncIndicator] navigator.onLine:', navigator.onLine);
     offlineSync.syncQueue();
   };
 

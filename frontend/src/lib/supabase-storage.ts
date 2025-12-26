@@ -157,29 +157,20 @@ export const supabaseStorage = {
   },
 
   async deleteProject(id: string) {
-    console.log('[deleteProject] Starting delete for project ID:', id);
-    
     const { error } = await supabase
       .from("projects")
       .delete()
       .eq("id", id);
     
-    console.log('[deleteProject] Delete result - error:', error);
-    
     if (error) throw error;
-    
-    console.log('[deleteProject] Successfully deleted project');
   },
 
   // Time Entries
   async getEntries(filters?: any, userId?: string): Promise<TimeEntry[]> {
     // userId should be provided by the hook, but if not, we can't proceed
     if (!userId) {
-      console.warn('[getEntries] No userId provided, returning empty array');
       return [];
     }
-
-    console.log('[getEntries] Fetching entries for user:', userId);
 
     const query = supabase
       .from("time_entries")
@@ -190,23 +181,16 @@ export const supabaseStorage = {
     // Note: Date filtering would need server-side support for gte/lte operators
     // For now, we'll fetch all entries and could filter client-side if needed
 
-    console.log('[getEntries] Executing query...');
     const result = await query;
-    console.log('[getEntries] Query result:', result);
     
     const { data, error } = result;
     
     if (error) {
-      console.error('[getEntries] Query error:', error);
       throw error;
     }
 
-    console.log('[getEntries] Raw data from database:', data);
-    console.log('[getEntries] Number of entries:', data?.length || 0);
-
     // Return early if no entries
     if (!data || data.length === 0) {
-      console.log('[getEntries] No entries found, returning empty array');
       return [];
     }
 
@@ -325,7 +309,6 @@ export const supabaseStorage = {
             .single();
           
           if (newTagResponse.error) {
-            console.error('[addEntry] Error creating tag:', newTagResponse.error);
             // Continue without the tag rather than failing the whole entry
             continue;
           }
@@ -608,7 +591,6 @@ export const supabaseStorage = {
       .single();
 
     if (error) {
-      console.error("Error fetching user settings:", error);
       return null;
     }
     return data?.settings as UserSettings || null;

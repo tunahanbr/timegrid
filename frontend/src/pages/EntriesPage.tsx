@@ -116,7 +116,6 @@ export default function EntriesPage() {
 
         return true;
       } catch (e) {
-        console.warn('Failed to filter entry:', entry.date);
         return false;
       }
     });

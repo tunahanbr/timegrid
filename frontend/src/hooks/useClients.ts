@@ -23,20 +23,12 @@ export function useClients() {
         await offlineStorage.setCachedClients(onlineClients);
         
         // Merge online and offline clients
-        console.log('[useClients] Merging clients - offline:', offlineClients.length, 'online:', onlineClients.length);
         return [...offlineClients, ...onlineClients] as Client[];
       } catch (error: any) {
-        console.error('[useClients] Query error:', error);
-        
         // On error, use cached online data + offline data
         const offlineClients = await offlineStorage.getOfflineClients();
         const cachedClients = await offlineStorage.getCachedClients();
         
-        if (error.code === 'PGRST116' || error.message?.includes('404')) {
-          console.warn('Database tables not set up yet. Run migration first.');
-        }
-        
-        console.log('[useClients] Using cached data - offline:', offlineClients.length, 'cached:', cachedClients.length);
         return [...offlineClients, ...cachedClients] as Client[];
       }
     },
@@ -50,8 +42,6 @@ export function useClients() {
     mutationFn: async (client: Omit<Client, "id" | "createdAt">) => {
       try {
         if (!navigator.onLine) {
-          console.log('[useClients] Adding client offline:', client);
-          
           // Queue operation when offline
           const queueId = offlineSync.queueOperation({
             type: 'add',
@@ -62,18 +52,14 @@ export function useClients() {
             },
           });
           
-          console.log('[useClients] Queued with ID:', queueId);
-          
           // Store offline for immediate UI update
           const offlineClient = await offlineStorage.addOfflineClient(client, queueId);
-          console.log('[useClients] Stored offline client:', offlineClient);
           
           toast.info("Client saved offline");
           return offlineClient;
         }
         return supabaseStorage.addClient(client, user!.id);
       } catch (error) {
-        console.error('[useClients] Error adding client:', error);
         throw error;
       }
     },
@@ -101,7 +87,6 @@ export function useClients() {
       return { previousClients };
     },
     onError: (error: any, variables, context) => {
-      console.error('[useClients] Mutation error:', error);
       // Rollback on error
       if (context?.previousClients) {
         queryClient.setQueryData(["clients", user?.id], context.previousClients);
@@ -109,13 +94,9 @@ export function useClients() {
       toast.error(error.message || "Failed to create client");
     },
     onSuccess: (data) => {
-      console.log('[useClients] Client added successfully:', data);
-      console.log('[useClients] Current user?.id:', user?.id);
-      
       if (data && 'isOffline' in data) {
         // Offline client added - invalidate to refetch from offline storage
         const queryKey = ["clients", user?.id];
-        console.log('[useClients] Invalidating query with key:', queryKey);
         
         // Invalidate and refetch - this will run the queryFn which now includes offline data
         queryClient.invalidateQueries({ queryKey });

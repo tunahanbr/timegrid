@@ -11,7 +11,7 @@ function copy(text: string) {
   try {
     navigator.clipboard.writeText(text);
   } catch (err) {
-    console.warn('Failed to copy to clipboard', err);
+    // Silent fail
   }
 }
 

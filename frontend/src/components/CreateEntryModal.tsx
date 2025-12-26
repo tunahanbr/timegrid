@@ -111,7 +111,7 @@ export function CreateEntryModal({
       setRecurrenceType('weekly');
       onClose();
     } catch (error) {
-      console.error('Failed to create time entry:', error);
+      // Error handled by mutation
     } finally {
       setIsSaving(false);
     }

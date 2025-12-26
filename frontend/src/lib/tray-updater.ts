@@ -37,8 +37,6 @@ async function updateTrayTitle() {
       const seconds = totalSeconds % 60;
       elapsed = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
       
-      console.log(`[Tray Updater] Timer running: ${elapsed}, projectId: ${timerState.currentProjectId}`);
-      
       // Get project name
       if (timerState.currentProjectId) {
         // First try cache
@@ -50,7 +48,7 @@ async function updateTrayTitle() {
             projectsCache = await getProjects();
             project = projectsCache.find(p => p.id === timerState.currentProjectId);
           } catch (error) {
-            console.error('Failed to fetch projects:', error);
+            // Silent fail
           }
         }
         
@@ -74,34 +72,26 @@ async function updateTrayTitle() {
       }
     }
 
-    console.log(`[Tray Updater] Invoking update_tray_title with:`, { elapsed, project: projectName });
     await invoke('update_tray_title', { elapsed, project: projectName });
-    console.log(`[Tray Updater] Successfully updated menu bar`);
   } catch (error) {
-    console.error('[Tray Updater] Failed to update tray title:', error);
+    // Silent fail
   }
 }
 
 export function startTrayUpdater() {
   if (!isTauri()) {
-    console.log('[Tray Updater] Not in Tauri environment, skipping');
     return;
   }
-
-  console.log('[Tray Updater] Service starting...');
 
   // Fetch projects immediately on start
   if (getProjects) {
     getProjects().then(projects => {
       projectsCache = projects;
-      console.log(`[Tray Updater] Loaded ${projects.length} projects`);
       updateTrayTitle(); // Update with projects available
     }).catch(error => {
-      console.error('[Tray Updater] Failed to fetch initial projects:', error);
       updateTrayTitle(); // Still update, just without project names
     });
   } else {
-    console.log('[Tray Updater] No projects getter available yet');
     // Update immediately even without projects
     updateTrayTitle();
   }
@@ -112,12 +102,10 @@ export function startTrayUpdater() {
   }
   
   updateInterval = window.setInterval(updateTrayTitle, 1000);
-  console.log('[Tray Updater] Service started, updating every 1 second');
   
   // Listen for storage changes (from other windows)
   window.addEventListener('storage', (e) => {
     if (e.key === 'timetrack_timer') {
-      console.log('[Tray Updater] Timer state changed in storage, updating...');
       updateTrayTitle();
     }
   });

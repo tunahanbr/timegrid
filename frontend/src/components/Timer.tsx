@@ -83,7 +83,6 @@ export function Timer() {
   useEffect(() => {
     import('@/lib/timer-sync').then(({ onTimerStateChange }) => {
       const cleanup = onTimerStateChange((newState) => {
-        console.log('[Timer] Syncing timer state from other window:', newState);
         setTimerState(newState);
       });
       
@@ -137,8 +136,6 @@ export function Timer() {
     }
 
     // Save to Supabase
-    console.log('[Timer] Calling addEntry');
-    console.log('[Timer] navigator.onLine:', navigator.onLine);
     addEntry({
       projectId: timerState.currentProjectId!,
       description: timerState.currentDescription,

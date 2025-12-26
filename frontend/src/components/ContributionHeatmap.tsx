@@ -60,7 +60,7 @@ export function ContributionHeatmap({ entries, showLabel = true }: ContributionH
           dateMap.set(dateKey, currentHours + entryHours);
         }
       } catch (e) {
-        console.warn('Failed to parse entry date:', entry.date);
+        // Skip invalid date
       }
     });
     

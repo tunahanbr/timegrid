@@ -38,7 +38,6 @@ export default function DashboardPage() {
         const entryDate = parseISO(entry.date);
         return isWithinInterval(entryDate, { start: startDate, end: today });
       } catch (e) {
-        console.warn('Failed to parse entry date:', entry.date);
         return false;
       }
     });
@@ -98,7 +97,7 @@ export default function DashboardPage() {
         }
         entriesByDay.get(dayStr)!.push(entry);
       } catch (e) {
-        console.warn('Failed to group entry by day:', entry.date);
+        // Skip invalid entries
       }
     });
 
@@ -158,7 +157,7 @@ export default function DashboardPage() {
         const dayOfWeek = getDay(parseISO(entry.date));
         dayMap.set(dayOfWeek, (dayMap.get(dayOfWeek) || 0) + entry.duration);
       } catch (e) {
-        console.warn('Failed to parse entry date for day of week:', entry.date);
+        // Skip invalid entries
       }
     });
 

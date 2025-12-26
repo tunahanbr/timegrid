@@ -55,41 +55,31 @@ export function useProjects() {
             },
           });
           
-          console.log('[useProjects] Queued with ID:', queueId);
-          
           // Store offline for immediate UI update
           const offlineProject = await offlineStorage.addOfflineProject(project, queueId);
-          console.log('[useProjects] Stored offline project:', offlineProject);
           
           toast.info("Project saved offline");
           return offlineProject;
         }
         return supabaseStorage.addProject(project, user!.id);
       } catch (error) {
-        console.error('[useProjects] Error adding project:', error);
         throw error;
       }
     },
     onMutate: (variables) => {
-      console.log('[useProjects] onMutate called with:', variables);
+      // Mutation started
     },
     onSuccess: async (data) => {
-      console.log('[useProjects] Project added successfully:', data);
-      console.log('[useProjects] Current user?.id:', user?.id);
-      
       if (data && 'isOffline' in data) {
         // Offline project added - invalidate to refetch from offline storage
         const queryKey = ["projects", user?.id];
-        console.log('[useProjects] Invalidating query with key:', queryKey);
         
         // Invalidate and refetch - this will run the queryFn which now includes offline data
         queryClient.invalidateQueries({ queryKey });
         
         try {
           await queryClient.refetchQueries({ queryKey });
-          console.log('[useProjects] Refetch completed successfully');
         } catch (error) {
-          console.error('[useProjects] Refetch error (expected when offline):', error);
           // This is expected when offline - the query will use cached data
         }
       } else {
@@ -102,7 +92,6 @@ export function useProjects() {
       }
     },
     onError: (error: any) => {
-      console.error('[useProjects] Mutation error:', error);
       toast.error(error.message || "Failed to create project");
     },
   });

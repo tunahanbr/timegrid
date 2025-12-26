@@ -114,7 +114,7 @@ export function TimerWidget() {
       
       // Tray title resets via tray-updater observing storage
     } catch (error) {
-      console.error('Failed to save time entry:', error);
+      // Error handled silently
     }
   };
 
@@ -168,7 +168,6 @@ export function TimerWidget() {
   useEffect(() => {
     import('@/lib/timer-sync').then(({ onTimerStateChange }) => {
       const cleanup = onTimerStateChange((newState) => {
-        console.log('[TimerWidget] Syncing timer state from other window:', newState);
         setTimerState(newState);
       });
       

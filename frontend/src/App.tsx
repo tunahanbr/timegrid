@@ -63,7 +63,7 @@ const queryClient = new QueryClient({
 
 // Initialize app on load (async, but we don't need to wait)
 initializeApp().catch(error => {
-  console.error('[App] Failed to initialize app:', error);
+  // Silent fail - app will continue to work
 });
 
 const AppRoutes = ({ children }: { children: React.ReactNode }) => {
@@ -193,8 +193,6 @@ const AppContent = () => {
   // Listen for offline sync completion to refetch queries
   useEffect(() => {
     const handleSyncComplete = () => {
-      console.log('[App] Offline sync completed, invalidating and refetching queries...');
-      
       // Invalidate all queries to force a refetch from the server
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['time-entries'] });
@@ -205,8 +203,6 @@ const AppContent = () => {
       queryClient.refetchQueries({ queryKey: ['projects'] });
       queryClient.refetchQueries({ queryKey: ['time-entries'] });
       queryClient.refetchQueries({ queryKey: ['clients'] });
-      
-      console.log('[App] All queries invalidated and refetching');
     };
     
     window.addEventListener('offline-sync-complete', handleSyncComplete);

@@ -28,7 +28,7 @@ export function onTimerStateChange(callback: (state: TimerState) => void) {
         const state = JSON.parse(e.newValue) as TimerState;
         callback(state);
       } catch (error) {
-        console.error('Failed to parse timer state:', error);
+        // Skip invalid state
       }
     }
   };

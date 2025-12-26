@@ -17,11 +17,10 @@ export const useTauriEvents = (onToggleTimer?: () => void) => {
         const { event } = await import('@tauri-apps/api');
         
         unlisten = await event.listen('toggle-timer', () => {
-          console.log('Toggle timer event received from system tray');
           onToggleTimer?.();
         });
       } catch (error) {
-        console.error('Failed to setup Tauri event listener:', error);
+        // Silent fail if Tauri API not available
       }
     };
 

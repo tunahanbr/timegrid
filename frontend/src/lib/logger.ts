@@ -24,11 +24,8 @@ class Logger {
   }
 
   private shouldLog(level: LogLevel): boolean {
-    if (!this.isDevelopment) {
-      // In production, only log errors
-      return level === 'error';
-    }
-    return true;
+    // Disable all logging
+    return false;
   }
 
   debug(message: string, options?: LogOptions): void {

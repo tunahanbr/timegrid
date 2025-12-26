@@ -318,7 +318,7 @@ export function WeekCalendar({ entries, projects, view = 'week', isExpanded = fa
           });
         });
       } catch (e) {
-        console.warn('Failed to parse entry:', entry);
+        // Skip invalid entry
       }
     });
 

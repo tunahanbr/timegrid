@@ -73,7 +73,6 @@ export function useUserSettings() {
         queryClient.setQueryData(["user-settings", user?.id], context.previousSettings);
       }
       toast.error(error.message || "Failed to save settings");
-      console.error(error);
     },
   });
 

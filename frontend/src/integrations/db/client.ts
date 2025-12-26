@@ -61,7 +61,6 @@ async function apiCall(endpoint: string, options: RequestInit = {}) {
     // For error status codes, try to provide a helpful message
     if (response.status >= 400) {
       const errorMsg = text ? text.substring(0, 200) : response.statusText;
-      console.error('Non-JSON error response:', { status: response.status, statusText: response.statusText, text: errorMsg });
       return { 
         data: null, 
         error: { 
@@ -69,7 +68,6 @@ async function apiCall(endpoint: string, options: RequestInit = {}) {
         } 
       };
     }
-    console.error('Non-JSON response:', { status: response.status, statusText: response.statusText, text: text.substring(0, 200) });
     throw new Error(`Server returned non-JSON response (${response.status} ${response.statusText}): ${text.substring(0, 100)}`);
   }
   
@@ -81,9 +79,6 @@ async function apiCall(endpoint: string, options: RequestInit = {}) {
   try {
     return JSON.parse(text);
   } catch (error) {
-    console.error('JSON parse error:', error);
-    console.error('Response text:', text);
-    // For error status codes, return error object instead of throwing
     if (response.status >= 400) {
       return { 
         data: null, 

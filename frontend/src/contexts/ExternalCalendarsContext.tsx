@@ -24,7 +24,7 @@ function saveIcalCalendars(calendars: IcalCalendar[]): void {
   try {
     localStorage.setItem(ICAL_CALENDARS_STORAGE_KEY, JSON.stringify(calendars));
   } catch {
-    console.warn('Failed to save iCal calendars to localStorage');
+    // Silent fail
   }
 }
 
@@ -149,13 +149,13 @@ export const ExternalCalendarsProvider: React.FC<{ children: React.ReactNode }> 
             }));
             allEvents.push(...taggedEvents);
           } catch (err) {
-            console.warn(`Failed to sync calendar ${calendar.name}:`, err);
+            // Silent fail for individual calendar
           }
         }
         
         dispatch({ type: 'SET_EVENTS_FOR_SOURCE', source: 'ical', events: allEvents, syncedAt: new Date().toISOString() });
       } catch (err) {
-        console.warn('Auto-sync iCal calendars failed on mount:', err);
+        // Silent fail for auto-sync
       }
     };
     autoSync();
@@ -185,13 +185,13 @@ export const ExternalCalendarsProvider: React.FC<{ children: React.ReactNode }> 
             }));
             allEvents.push(...taggedEvents);
           } catch (err) {
-            console.debug(`Periodic sync failed for calendar ${calendar.name}:`, err);
+            // Silent fail - will retry
           }
         }
         
         dispatch({ type: 'SET_EVENTS_FOR_SOURCE', source: 'ical', events: allEvents, syncedAt: new Date().toISOString() });
       } catch (err) {
-        console.debug('Periodic iCal sync failed (will retry):', err);
+        // Silent fail - will retry
       }
     }, 5 * 60 * 1000); // 5 minutes
 

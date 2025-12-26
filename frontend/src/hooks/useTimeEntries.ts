@@ -13,29 +13,22 @@ export function useTimeEntries(filters?: any) {
   const { data: entries = [], isLoading, error } = useQuery({
     queryKey: ["time-entries", user?.id, filters],
     queryFn: async () => {
-      console.log('[useTimeEntries] Query function called');
       try {
         const offlineEntries = await offlineStorage.getOfflineEntries();
-        console.log('[useTimeEntries] Loaded offline entries:', offlineEntries);
         
         // Try to fetch online data - pass userId explicitly
         const onlineEntries = await supabaseStorage.getEntries(filters, user?.id);
-        console.log('[useTimeEntries] Loaded online entries:', onlineEntries);
         
         // Cache the online data for offline use
         await offlineStorage.setCachedEntries(onlineEntries);
         
         // Merge online and offline entries
-        console.log('[useTimeEntries] Merging entries - offline:', offlineEntries.length, 'online:', onlineEntries.length);
         return [...offlineEntries, ...onlineEntries] as TimeEntry[];
       } catch (error) {
-        console.error('[useTimeEntries] Query error:', error);
-        
         // On error, use cached online data + offline data
         const offlineEntries = await offlineStorage.getOfflineEntries();
         const cachedEntries = await offlineStorage.getCachedEntries();
         
-        console.log('[useTimeEntries] Using cached data - offline:', offlineEntries.length, 'cached:', cachedEntries.length);
         return [...offlineEntries, ...cachedEntries] as TimeEntry[];
       }
     },
@@ -49,15 +42,8 @@ export function useTimeEntries(filters?: any) {
 
   const addMutation = useMutation({
     mutationFn: async (entry: Omit<TimeEntry, "id" | "createdAt">) => {
-      console.log('[useTimeEntries] ========== ADD MUTATION CALLED ==========');
-      console.log('[useTimeEntries] Entry data:', entry);
-      console.log('[useTimeEntries] navigator.onLine:', navigator.onLine);
-      console.log('[useTimeEntries] User ID:', user?.id);
-      
       try {
         if (!navigator.onLine) {
-          console.log('[useTimeEntries] Adding entry offline:', entry);
-          
           // Queue operation when offline
           const queueId = offlineSync.queueOperation({
             type: 'add',
@@ -68,43 +54,32 @@ export function useTimeEntries(filters?: any) {
             },
           });
           
-          console.log('[useTimeEntries] Queued with ID:', queueId);
-          
           // Store offline for immediate UI update
           const offlineEntry = await offlineStorage.addOfflineEntry(entry, queueId);
-          console.log('[useTimeEntries] Stored offline entry:', offlineEntry);
           
           toast.info("Entry saved offline");
           return offlineEntry;
         }
         return supabaseStorage.addEntry(entry, user!.id);
       } catch (error) {
-        console.error('[useTimeEntries] Error adding entry:', error);
         throw error;
       }
     },
     onSuccess: async (data) => {
-      console.log('[useTimeEntries] Entry added successfully:', data);
-      console.log('[useTimeEntries] Current user?.id:', user?.id, 'filters:', filters);
-      
       if (data && 'isOffline' in data) {
         // Offline entry added - invalidate to refetch from offline storage
         const queryKey = ["time-entries", user?.id, filters];
-        console.log('[useTimeEntries] Invalidating query with key:', queryKey);
         
         // Invalidate and refetch - this will run the queryFn which now includes offline data
         await queryClient.invalidateQueries({ queryKey });
         
         try {
           await queryClient.refetchQueries({ queryKey });
-          console.log('[useTimeEntries] Refetch completed successfully');
         } catch (error) {
-          console.error('[useTimeEntries] Refetch error (expected when offline):', error);
+          // Expected when offline
         }
       } else if (data) {
         // Online entry added - invalidate all time-entries queries to ensure all components update
-        console.log('[useTimeEntries] Invalidating all time-entries queries');
-        
         await queryClient.invalidateQueries({ 
           queryKey: ["time-entries"],
           refetchType: 'all' 
@@ -114,7 +89,6 @@ export function useTimeEntries(filters?: any) {
       }
     },
     onError: (error: any) => {
-      console.error('[useTimeEntries] Mutation error:', error);
       toast.error(error.message || "Failed to add entry");
     },
   });

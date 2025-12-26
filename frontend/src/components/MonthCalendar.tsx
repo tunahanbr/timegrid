@@ -25,7 +25,6 @@ export default function MonthCalendar({ entries, projects }: MonthCalendarProps)
         if (map[d]) map[d].push(e);
       } catch (err) {
         // Ignore malformed dates while building calendar map
-        console.debug('Skipping malformed entry date', err);
       }
     }
     return map;

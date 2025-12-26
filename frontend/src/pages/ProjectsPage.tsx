@@ -73,27 +73,18 @@ export default function ProjectsPage() {
   } = useProjects();
 
   const handleAddProject = () => {
-    console.log('[ProjectsPage] handleAddProject called');
-    console.log('[ProjectsPage] newProjectName:', newProjectName);
-    console.log('[ProjectsPage] navigator.onLine:', navigator.onLine);
-    console.log('[ProjectsPage] addProject function:', typeof addProject, addProject);
-    console.log('[ProjectsPage] isCreating:', isCreating);
-    
     if (!newProjectName.trim()) {
-      console.log('[ProjectsPage] Empty project name, returning');
       return;
     }
 
-    console.log('[ProjectsPage] Calling addProject mutation');
     try {
-      const result = addProject({
+      addProject({
         name: newProjectName.trim(),
         color: selectedColor,
         description: newProjectDescription.trim() || undefined,
       });
-      console.log('[ProjectsPage] addProject result:', result);
     } catch (error) {
-      console.error('[ProjectsPage] Error calling addProject:', error);
+      // Error handled by mutation
     }
 
     setNewProjectName("");
@@ -103,9 +94,6 @@ export default function ProjectsPage() {
   };
 
   const handleDeleteProject = async (id: string) => {
-    console.log('[ProjectsPage] Delete button clicked for project:', id);
-    
-    // Open the delete confirmation dialog instead of using window.confirm
     const project = projects.find(p => p.id === id);
     setDeletingProject(project);
   };
@@ -113,7 +101,6 @@ export default function ProjectsPage() {
   const confirmDelete = () => {
     if (!deletingProject) return;
     
-    console.log('[ProjectsPage] User confirmed delete, calling deleteProject for:', deletingProject.id);
     deleteProject(deletingProject.id);
     setDeletingProject(null);
   };
