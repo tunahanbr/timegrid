@@ -6,16 +6,22 @@ import { useCalendars, Calendar } from '@/hooks/useCalendars';
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-export default function CalendarsManager() {
+interface CalendarsManagerProps {
+  compact?: boolean;
+}
+
+export default function CalendarsManager({ compact = false }: CalendarsManagerProps) {
   const { calendars, isLoading, addCalendarAsync, updateCalendarAsync, deleteCalendarAsync, isAdding, isUpdating, isDeleting } = useCalendars();
   const [name, setName] = useState('');
   const [color, setColor] = useState('#2563eb');
   const [editing, setEditing] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const busy = isAdding || isUpdating || isDeleting;
-  const modeLabel = editing ? 'Update calendar' : 'Add calendar';
+  const modeLabel = editing ? 'Edit Calendar' : 'Add Calendar';
 
   const sortedCalendars = useMemo(() => {
     return [...(calendars || [])].sort((a, b) => a.name.localeCompare(b.name));
@@ -25,6 +31,7 @@ export default function CalendarsManager() {
     setEditing(null);
     setName('');
     setColor('#2563eb');
+    setDialogOpen(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,7 +58,13 @@ export default function CalendarsManager() {
   const handleEdit = (cal: Calendar) => {
     setEditing(cal.id);
     setName(cal.name);
-    setColor(cal.color || COLOR_SWATCHES[0]);
+    setColor(cal.color || '#2563eb');
+    setDialogOpen(true);
+  };
+
+  const handleAdd = () => {
+    resetForm();
+    setDialogOpen(true);
   };
 
   const handleDelete = async () => {
@@ -67,66 +80,38 @@ export default function CalendarsManager() {
     }
   };
 
-  return (
-    <div className="space-y-4">
+  const CalendarForm = (
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        {isLoading && <div className="text-sm text-muted-foreground">Loading calendars…</div>}
-        {!isLoading && !sortedCalendars.length && (
-          <div className="text-sm text-muted-foreground">No calendars yet. Add one to start organizing feeds.</div>
-        )}
-        <div className="grid gap-3 md:grid-cols-2">
-          {sortedCalendars.map((cal) => (
-            <div key={cal.id} className="border rounded-md p-3 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: cal.color || '#6b7280' }} />
-                <div className="min-w-0">
-                  <div className="text-sm font-medium truncate" title={cal.name}>{cal.name}</div>
-                  <div className="text-xs text-muted-foreground truncate">{cal.id}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={() => handleEdit(cal)} disabled={busy}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => setDeleteId(cal.id)} disabled={busy}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
+        <Label htmlFor="calendar-name">Name</Label>
+        <Input
+          id="calendar-name"
+          placeholder="e.g., Work, Personal, Marketing"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          disabled={busy}
+          autoFocus
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="calendar-color">Color</Label>
+        <div className="flex items-center gap-3">
+          <Input
+            id="calendar-color"
+            type="color"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            disabled={busy}
+            className="h-10 w-20 cursor-pointer"
+          />
+          <span className="text-sm text-muted-foreground">{color}</span>
         </div>
       </div>
-
-      <form onSubmit={handleSubmit} className="border rounded-md p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="font-medium">{modeLabel}</div>
-          {busy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-        </div>
-        <div className="grid gap-4 md:grid-cols-[1fr_200px]">
-          <div className="space-y-2">
-            <Label htmlFor="calendar-name">Name</Label>
-            <Input
-              id="calendar-name"
-              placeholder="Marketing calendar"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={busy}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Color</Label>
-            <Input
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              disabled={busy}
-              className="h-10 w-20"
-            />
-          </div>
-        </div>
+      {!compact && (
         <div className="flex gap-2">
           <Button type="submit" disabled={busy}>
-            <Plus className="h-4 w-4 mr-2" /> {editing ? 'Save changes' : 'Add calendar'}
+            {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {editing ? 'Save changes' : 'Add calendar'}
           </Button>
           {editing && (
             <Button type="button" variant="ghost" onClick={resetForm} disabled={busy}>
@@ -134,7 +119,72 @@ export default function CalendarsManager() {
             </Button>
           )}
         </div>
-      </form>
+      )}
+    </form>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-3">
+        {isLoading && <div className="text-sm text-muted-foreground">Loading calendars…</div>}
+        {!isLoading && !sortedCalendars.length && (
+          <div className="text-sm text-muted-foreground">No calendars yet. Add one to start organizing your time entries.</div>
+        )}
+        {!isLoading && sortedCalendars.length > 0 && (
+          <div className="grid gap-2">
+            {sortedCalendars.map((cal) => (
+              <div key={cal.id} className="border rounded-md p-3 flex items-center justify-between gap-3 hover:bg-muted/40 transition-colors">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <span className="w-4 h-4 rounded-full border-2 flex-shrink-0" style={{ backgroundColor: cal.color || '#6b7280' }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium truncate" title={cal.name}>{cal.name}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => handleEdit(cal)} disabled={busy}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteId(cal.id)} disabled={busy}>
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {compact ? (
+        <Button onClick={handleAdd} variant="outline" className="w-full">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Calendar
+        </Button>
+      ) : (
+        CalendarForm
+      )}
+
+      {compact && (
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{modeLabel}</DialogTitle>
+              <DialogDescription>
+                {editing ? 'Update your calendar name and color' : 'Create a new calendar to organize your time entries'}
+              </DialogDescription>
+            </DialogHeader>
+            {CalendarForm}
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={resetForm} disabled={busy}>
+                Cancel
+              </Button>
+              <Button onClick={handleSubmit} disabled={busy}>
+                {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {editing ? 'Save' : 'Add'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <DeleteConfirmationDialog
         open={deleteId !== null}

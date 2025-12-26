@@ -1,6 +1,6 @@
 import type { ElementType } from "react";
 import { NavLink } from "@/components/NavLink";
-import { Timer, List, FolderKanban, Hash, Settings, BarChart3, Calendar } from "lucide-react";
+import { Timer, List, FolderKanban, Hash, Settings, BarChart3, Calendar, ExternalLink } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -16,7 +16,6 @@ export function AppSidebar() {
   const primaryNav = [
     { name: "Timer", href: "/", icon: Timer },
     { name: "Dashboard", href: "/dashboard", icon: BarChart3 },
-    { name: "Calendar", href: "/calendar", icon: Calendar },
     { name: "Entries", href: "/entries", icon: List },
   ];
 
@@ -62,6 +61,23 @@ export function AppSidebar() {
                 Personal
               </SidebarGroupLabel>
               {renderItems(primaryNav, true)}
+              
+              {/* Calendar - External Link */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a
+                    href="/calendar/expanded"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-surface"
+                    aria-label="Open Calendar in new tab"
+                  >
+                    <Calendar className="h-5 w-5" aria-hidden="true" />
+                    <span>Calendar</span>
+                    <ExternalLink className="h-3.5 w-3.5 ml-auto opacity-60" aria-hidden="true" />
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

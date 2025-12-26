@@ -149,7 +149,7 @@ export default function SettingsPage() {
             <CardDescription>Create dedicated calendars to organize your time entries and generate separate ICS feeds</CardDescription>
           </CardHeader>
           <CardContent>
-            <CalendarsManager />
+            <CalendarsManager compact />
           </CardContent>
         </Card>
 
@@ -171,7 +171,7 @@ export default function SettingsPage() {
             <CardDescription>Subscribe to iCal feeds from Apple, Google, or other calendar services to overlay them on your calendar</CardDescription>
           </CardHeader>
           <CardContent>
-            <IcalConnect />
+            <IcalConnect compact />
           </CardContent>
         </Card>
 

@@ -252,7 +252,6 @@ const AppContent = () => {
                 <Routes>
                   <Route path="/" element={<TimerPage />} />
                   <Route path="/dashboard" element={<DashboardPage />} />
-                  <Route path="/calendar" element={<CalendarPage />} />
                   <Route path="/entries" element={<EntriesPage />} />
                   <Route path="/projects" element={<ProjectsPage />} />
                   <Route path="/tags" element={<TagsPage />} />
