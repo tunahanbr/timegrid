@@ -1,6 +1,6 @@
 -- Create calendars table
 CREATE TABLE IF NOT EXISTS calendars (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id SERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   color TEXT NOT NULL DEFAULT '#3b82f6',
@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS calendars (
 CREATE INDEX IF NOT EXISTS idx_calendars_user ON calendars(user_id);
 
 -- Add calendar_id to time_entries
-ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS calendar_id UUID REFERENCES calendars(id) ON DELETE SET NULL;
+ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS calendar_id INTEGER REFERENCES calendars(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_time_entries_calendar ON time_entries(calendar_id);
 
 -- Trigger to update updated_at

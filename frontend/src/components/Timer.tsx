@@ -32,6 +32,7 @@ import { X as XIcon } from "lucide-react";
 import { useTauriEvents } from "@/hooks/useTauriEvents";
 import { Switch } from "@/components/ui/switch";
 import { useUserSettings } from "@/hooks/useUserSettings";
+import { DeleteConfirmationDialog } from "@/components/DeleteConfirmationDialog";
 
 export function Timer() {
   const [timerState, setTimerState] = useState<TimerState>(storage.getTimerState());
@@ -39,6 +40,7 @@ export function Timer() {
   const [description, setDescription] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isBillable, setIsBillable] = useState(true);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   
   // Manual entry state
   const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
@@ -163,10 +165,6 @@ export function Timer() {
   };
 
   const cancelTimer = () => {
-    if (!confirm("Are you sure you want to cancel this timer? Time will not be saved.")) {
-      return;
-    }
-
     const newState: TimerState = {
       isRunning: false,
       isPaused: false,
@@ -179,6 +177,7 @@ export function Timer() {
     storage.saveTimerState(newState);
     setDescription("");
     setSelectedTags([]);
+    setShowCancelDialog(false);
     toast.success("Timer cancelled");
   };
 
@@ -261,7 +260,7 @@ export function Timer() {
       key: 'Escape',
       callback: () => {
         if (isRunning || isPaused) {
-          cancelTimer();
+          setShowCancelDialog(true);
         }
       },
       description: 'Cancel timer',
@@ -466,7 +465,7 @@ export function Timer() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={cancelTimer}
+                onClick={() => setShowCancelDialog(true)}
                 title="Cancel timer (Esc)"
                 aria-label="Cancel timer without saving"
               >
@@ -499,7 +498,7 @@ export function Timer() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={cancelTimer}
+                onClick={() => setShowCancelDialog(true)}
                 title="Cancel timer (Esc)"
                 aria-label="Cancel timer without saving"
               >
@@ -704,6 +703,14 @@ export function Timer() {
           Add time entries manually for past work or when you forgot to start the timer.
         </p>
       </div>
+
+      <DeleteConfirmationDialog
+        open={showCancelDialog}
+        title="Cancel timer"
+        description="Are you sure you want to cancel this timer? Time will not be saved."
+        onConfirm={cancelTimer}
+        onCancel={() => setShowCancelDialog(false)}
+      />
     </div>
   );
 }

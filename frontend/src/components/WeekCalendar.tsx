@@ -3,6 +3,7 @@ import { TimeEntry, Project } from '@/lib/supabase-storage';
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, eachDayOfInterval as eachDay, parseISO, isWithinInterval } from 'date-fns';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useTimeEntries } from '@/hooks/useTimeEntries';
@@ -726,12 +727,13 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
                       for (const block of dayEntries) {
                         const startMin = (block.startHour - HOUR_START) * 60 + block.startMinute;
                         const endMin = startMin + (block.entry.duration / 60);
+                        const calendar = calendars?.find(c => c.id === block.entry.calendarId);
                         itemsBase.push({
                           kind: 'local',
                           id: `local:${block.entry.id}`,
                           startMin: Math.max(0, startMin),
                           endMin: Math.min(24*60, endMin),
-                          color: block.project?.color || '#888888',
+                          color: calendar?.color || block.project?.color || '#888888',
                           local: block,
                           external: undefined,
                         });
@@ -809,12 +811,25 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
 
                         // Local block
                         const block = item.local!;
+                        const hexToRgb = (hex: string) => {
+                          const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                          return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '136, 136, 136';
+                        };
+                        const calendarColor = item.color || '#888888';
+                        const rgbColor = hexToRgb(calendarColor);
                         return (
                           <Tooltip key={`ci-${idx}`}>
                             <TooltipTrigger asChild>
                               <div
                                 className="absolute rounded-md p-1.5 text-white text-xs font-medium overflow-hidden cursor-pointer hover:ring-2 hover:ring-white/50 transition-all pointer-events-auto group"
-                                style={{ ...stylePos, backgroundColor: item.color || '#888888' }}
+                                style={{ 
+                                  ...stylePos,
+                                  backgroundColor: `rgba(${rgbColor}, 0.25)`,
+                                  borderWidth: '2px',
+                                  borderColor: calendarColor,
+                                  color: '#ffffff',
+                                  textShadow: '0 0 2px rgba(0,0,0,0.8)'
+                                }}
                                 onMouseDown={() => { suppressNextMouseUp.current = true; }}
                                 onContextMenu={(e) => handleBlockContextMenu(block.entry, e)}
                               >
@@ -872,6 +887,15 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
                                   )}
                                 </p>
                                 <p>Duration: {Math.round((block.entry.duration / 60) * 10) / 10} min</p>
+                                {block.entry.tags && block.entry.tags.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-2">
+                                    {block.entry.tags.map((tag) => (
+                                      <Badge key={tag} variant="secondary" className="text-xs">
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </TooltipContent>
                           </Tooltip>

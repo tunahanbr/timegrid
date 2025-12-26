@@ -136,8 +136,7 @@ class IndexedStorage {
           this._notifyUser('Storage permission granted! Your data is now unlimited.', 'success');
         } else {
           logger.warn('Persistent storage denied by user', { context: 'IndexedStorage' });
-          // Show info about limited storage
-          this._notifyUser('Using limited storage (~50MB). You can enable unlimited storage in browser settings.', 'info');
+          // Don't show notification - users can enable in settings if needed
         }
       } else {
         logger.info('Storage already persisted', { context: 'IndexedStorage' });

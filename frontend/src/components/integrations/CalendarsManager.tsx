@@ -5,12 +5,14 @@ import { Label } from '@/components/ui/label';
 import { useCalendars, Calendar } from '@/hooks/useCalendars';
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 
 export default function CalendarsManager() {
   const { calendars, isLoading, addCalendarAsync, updateCalendarAsync, deleteCalendarAsync, isAdding, isUpdating, isDeleting } = useCalendars();
   const [name, setName] = useState('');
   const [color, setColor] = useState('#2563eb');
   const [editing, setEditing] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const busy = isAdding || isUpdating || isDeleting;
   const modeLabel = editing ? 'Update calendar' : 'Add calendar';
@@ -52,12 +54,13 @@ export default function CalendarsManager() {
     setColor(cal.color || COLOR_SWATCHES[0]);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this calendar? Existing entries assigned to it will be uncategorized in exports.')) return;
+  const handleDelete = async () => {
+    if (!deleteId) return;
     try {
-      await deleteCalendarAsync(id);
+      await deleteCalendarAsync(deleteId);
       toast.success('Calendar deleted');
-      if (editing === id) resetForm();
+      if (editing === deleteId) resetForm();
+      setDeleteId(null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unable to delete calendar';
       toast.error(message);
@@ -85,7 +88,7 @@ export default function CalendarsManager() {
                 <Button variant="outline" size="icon" onClick={() => handleEdit(cal)} disabled={busy}>
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => handleDelete(cal.id)} disabled={busy}>
+                <Button variant="ghost" size="icon" onClick={() => setDeleteId(cal.id)} disabled={busy}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
@@ -132,6 +135,15 @@ export default function CalendarsManager() {
           )}
         </div>
       </form>
+
+      <DeleteConfirmationDialog
+        open={deleteId !== null}
+        title="Delete calendar"
+        description="Existing entries assigned to this calendar will be uncategorized in exports. This action cannot be undone."
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteId(null)}
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

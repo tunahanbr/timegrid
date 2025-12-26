@@ -50,14 +50,14 @@ export function useCalendars() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, name, color }: { id: string; name: string; color: string }) => {
-      const res = await fetch(`${api}/api/calendars?id=eq.${encodeURIComponent(id)}`, {
+      const res = await fetch(`${api}/api/calendars`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders(),
         },
         credentials: 'include',
-        body: JSON.stringify({ name, color }),
+        body: JSON.stringify({ id, name, color }),
       });
       if (!res.ok) throw new Error('Failed to update calendar');
       return res.json();
@@ -67,12 +67,14 @@ export function useCalendars() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`${api}/api/calendars?id=eq.${encodeURIComponent(id)}`, {
+      const res = await fetch(`${api}/api/calendars`, {
         method: 'DELETE',
         headers: {
+          'Content-Type': 'application/json',
           ...getAuthHeaders(),
         },
         credentials: 'include',
+        body: JSON.stringify({ id }),
       });
       if (!res.ok) throw new Error('Failed to delete calendar');
       return res.json();

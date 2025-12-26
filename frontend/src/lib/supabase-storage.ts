@@ -128,6 +128,7 @@ export const supabaseStorage = {
       .from("projects")
       .insert({
         name: project.name,
+        description: project.description,
         color: project.color,
         hourly_rate: project.hourlyRate || 0,
         client_id: project.clientId,
@@ -145,6 +146,7 @@ export const supabaseStorage = {
       .from("projects")
       .update({
         name: updates.name,
+        description: updates.description,
         color: updates.color,
         hourly_rate: updates.hourlyRate,
         client_id: updates.clientId,
