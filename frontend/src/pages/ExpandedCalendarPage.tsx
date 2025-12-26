@@ -9,7 +9,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useExternalCalendarsContext } from '@/contexts/useExternalCalendarsContext';
 import { startOfWeek } from 'date-fns';
 
@@ -78,63 +77,90 @@ export default function ExpandedCalendarPage() {
     setEnabledIcalCalendars(newSet);
   };
 
+  // Helper function to darken a color
+  const darkenColor = (color: string, amount: number = 0.1): string => {
+    // Remove # if present
+    const hex = color.replace('#', '');
+    
+    // Parse RGB
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    
+    // Darken by reducing each component
+    const newR = Math.max(0, Math.floor(r * (1 - amount)));
+    const newG = Math.max(0, Math.floor(g * (1 - amount)));
+    const newB = Math.max(0, Math.floor(b * (1 - amount)));
+    
+    // Convert back to hex
+    return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+  };
+
   return (
     <div className="w-screen h-screen flex bg-background">
       {/* Sidebar */}
-      <div className="w-64 border-r border-border flex flex-col bg-muted/30 px-6 py-4 overflow-y-auto flex-shrink-0">
-        {/* Calendars Section */}
-        {calendars && calendars.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3">Calendars</h3>
-            <div className="space-y-2">
-              {calendars.map((calendar) => (
-                <div key={calendar.id} className="flex items-center gap-3 cursor-pointer hover:bg-background/50 p-2 rounded transition-colors">
-                  <Checkbox 
-                    checked={enabledCalendars.has(calendar.id)}
-                    onCheckedChange={() => toggleCalendar(calendar.id)}
-                  />
-                  <span
-                    className="w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: calendar.color || '#9CA3AF' }}
-                  />
-                  <label className="text-sm flex-1 cursor-pointer truncate">
-                    {calendar.name}
-                  </label>
-                </div>
-              ))}
+      <div className="w-64 border-r border-border flex flex-col bg-card overflow-y-auto flex-shrink-0">
+        <div className="px-4 pt-8 pb-4">
+          {/* Calendars Section */}
+          {calendars && calendars.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4 px-2">Calendars</h3>
+              <div className="space-y-1">
+                {calendars.map((calendar) => (
+                  <div 
+                    key={calendar.id} 
+                    className="flex items-center gap-3 cursor-pointer hover:bg-muted/40 px-2 py-2 rounded-md transition-colors"
+                    onClick={() => toggleCalendar(calendar.id)}
+                  >
+                    <span
+                      className="w-4 h-4 rounded-full flex-shrink-0 border-2 transition-all"
+                      style={{ 
+                        backgroundColor: enabledCalendars.has(calendar.id) ? (calendar.color || '#9CA3AF') : 'transparent',
+                        borderColor: darkenColor(calendar.color || '#9CA3AF')
+                      }}
+                    />
+                    <label className="text-sm font-medium flex-1 cursor-pointer truncate">
+                      {calendar.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Others Section */}
-        {icalCalendars && icalCalendars.length > 0 && (
-          <div>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3">Others</h3>
-            <div className="space-y-2">
-              {icalCalendars.map((calendar) => (
-                <div key={calendar.id} className="flex items-center gap-3 cursor-pointer hover:bg-background/50 p-2 rounded transition-colors">
-                  <Checkbox 
-                    checked={enabledIcalCalendars.has(calendar.id)}
-                    onCheckedChange={() => toggleIcalCalendar(calendar.id)}
-                  />
-                  <span
-                    className="w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: calendar.color || '#9CA3AF' }}
-                  />
-                  <label className="text-sm flex-1 cursor-pointer truncate">
-                    {calendar.name}
-                  </label>
-                </div>
-              ))}
+          {/* Others Section */}
+          {icalCalendars && icalCalendars.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4 px-2">Others</h3>
+              <div className="space-y-1">
+                {icalCalendars.map((calendar) => (
+                  <div 
+                    key={calendar.id} 
+                    className="flex items-center gap-3 cursor-pointer hover:bg-muted/40 px-2 py-2 rounded-md transition-colors"
+                    onClick={() => toggleIcalCalendar(calendar.id)}
+                  >
+                    <span
+                      className="w-4 h-4 rounded-full flex-shrink-0 border-2 transition-all"
+                      style={{ 
+                        backgroundColor: enabledIcalCalendars.has(calendar.id) ? (calendar.color || '#9CA3AF') : 'transparent',
+                        borderColor: darkenColor(calendar.color || '#9CA3AF')
+                      }}
+                    />
+                    <label className="text-sm font-medium flex-1 cursor-pointer truncate">
+                      {calendar.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header with close button, navigation, and view tabs */}
-        <div className="px-6 py-4 flex items-center justify-between border-b border-border flex-shrink-0">
+        <div className="px-6 py-5 flex items-center justify-between border-b border-border flex-shrink-0">
           {/* Left: Week navigation (only for week/day views) */}
           <div className="flex items-center gap-2">
             {(view === 'week' || view === 'day' || view === 'workweek') && (
