@@ -93,7 +93,7 @@ export function useTimeEntries(filters?: any) {
         console.log('[useTimeEntries] Invalidating query with key:', queryKey);
         
         // Invalidate and refetch - this will run the queryFn which now includes offline data
-        queryClient.invalidateQueries({ queryKey });
+        await queryClient.invalidateQueries({ queryKey });
         
         try {
           await queryClient.refetchQueries({ queryKey });
@@ -102,27 +102,12 @@ export function useTimeEntries(filters?: any) {
           console.error('[useTimeEntries] Refetch error (expected when offline):', error);
         }
       } else if (data) {
-        // Online entry added - optimistically update the cache
-        const queryKey = ["time-entries", user?.id, filters];
+        // Online entry added - invalidate all time-entries queries to ensure all components update
+        console.log('[useTimeEntries] Invalidating all time-entries queries');
         
-        // Optimistically add the new entry to the cache
-        queryClient.setQueryData<TimeEntry[]>(queryKey, (oldEntries = []) => {
-          // Check if entry already exists to avoid duplicates
-          const exists = oldEntries.some(e => e.id === data.id);
-          if (exists) {
-            return oldEntries;
-          }
-          // Add new entry at the beginning (most recent first)
-          return [data, ...oldEntries];
-        });
-        
-        // Invalidate to ensure we get the latest data from server (including tags)
-        queryClient.invalidateQueries({ queryKey });
-        
-        // Force refetch to get complete data
-        queryClient.refetchQueries({ 
-          queryKey,
-          type: 'active' // Only refetch active queries
+        await queryClient.invalidateQueries({ 
+          queryKey: ["time-entries"],
+          refetchType: 'all' 
         });
         
         toast.success("Entry added");

@@ -29,6 +29,7 @@ import { MobileTabBar } from "@/components/MobileTabBar";
 const TimerPage = lazy(() => import("./pages/TimerPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const CalendarPage = lazy(() => import("./pages/CalendarPage"));
+const ExpandedCalendarPage = lazy(() => import("./pages/ExpandedCalendarPage"));
 const EntriesPage = lazy(() => import("./pages/EntriesPage"));
 const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
 const TagsPage = lazy(() => import("./pages/TagsPage"));
@@ -232,6 +233,16 @@ const AppContent = () => {
             </ProtectedRoute>
           } 
         />
+      <Route 
+        path="/calendar/expanded" 
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <ExpandedCalendarPage />
+            </Suspense>
+          </ProtectedRoute>
+        } 
+      />
       <Route
         path="/*"
         element={

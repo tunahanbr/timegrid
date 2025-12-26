@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { TimeEntry, Project } from '@/lib/supabase-storage';
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, eachDayOfInterval as eachDay, parseISO, isWithinInterval } from 'date-fns';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -19,6 +19,10 @@ interface WeekCalendarProps {
   entries: TimeEntry[];
   projects: Project[];
   view?: 'week' | 'workweek' | 'day';
+  isExpanded?: boolean;
+  enabledCalendars?: Set<string>;
+  enabledIcalCalendars?: Set<string>;
+  externalWeekStart?: Date;
 }
 
 const HOUR_START = 0; // 12 AM (midnight)
@@ -34,8 +38,10 @@ interface TimeBlock {
   startMinute: number;
 }
 
-export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarProps) {
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 0 }));
+export function WeekCalendar({ entries, projects, view = 'week', isExpanded = false, enabledCalendars: propEnabledCalendars, enabledIcalCalendars: propEnabledIcalCalendars, externalWeekStart }: WeekCalendarProps) {
+  const [localWeekStart, setLocalWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 0 }));
+  const weekStart = isExpanded && externalWeekStart ? externalWeekStart : localWeekStart;
+  const setWeekStart = isExpanded ? () => {} : setLocalWeekStart;
   const { settings } = useUserSettings();
   const { deleteEntry } = useTimeEntries();
   const timeFormat = (settings?.preferences?.timeFormat as '12h' | '24h') || '12h';
@@ -58,10 +64,16 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
   const [selectedStartTime, setSelectedStartTime] = useState<Date | null>(null);
   const [selectedEndTime, setSelectedEndTime] = useState<Date | null>(null);
   const { calendars, isLoading: calendarsLoading } = useCalendars();
-  const [enabledCalendars, setEnabledCalendars] = useState<Set<string>>(new Set());
+  const [localEnabledCalendars, setLocalEnabledCalendars] = useState<Set<string>>(new Set());
   const [createCalendarId, setCreateCalendarId] = useState<string>('none');
+  // Use prop if provided (for expanded view), otherwise use local state
+  const enabledCalendars = propEnabledCalendars !== undefined ? propEnabledCalendars : localEnabledCalendars;
+  const setEnabledCalendars = propEnabledCalendars !== undefined ? () => {} : setLocalEnabledCalendars;
   const { icalCalendars } = useExternalCalendarsContext();
-  const [enabledIcalCalendars, setEnabledIcalCalendars] = useState<Set<string>>(new Set());
+  const [localEnabledIcalCalendars, setLocalEnabledIcalCalendars] = useState<Set<string>>(new Set());
+  // Use prop if provided (for expanded view), otherwise use local state
+  const enabledIcalCalendars = propEnabledIcalCalendars !== undefined ? propEnabledIcalCalendars : localEnabledIcalCalendars;
+  const setEnabledIcalCalendars = propEnabledIcalCalendars !== undefined ? () => {} : setLocalEnabledIcalCalendars;
 
   const weekEnd = useMemo(() => endOfWeek(weekStart, { weekStartsOn: 0 }), [weekStart]);
   const { getInRange } = useExternalEvents();
@@ -112,7 +124,9 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
   const filteredEntries = useMemo(() => {
     if (!calendars || calendars.length === 0) return entries;
     return entries.filter((entry) => {
+      // Always show entries without a calendar
       if (!entry.calendarId) return true;
+      // Check if the entry's calendar is enabled
       return enabledCalendars.has(entry.calendarId);
     });
   }, [entries, calendars, enabledCalendars]);
@@ -259,28 +273,49 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
 
         occurrences.forEach(occ => {
           if (!isWithinInterval(occ, { start: weekStart, end: weekEnd })) return;
-          const dayKey = format(occ, 'yyyy-MM-dd');
-
-          const startHour = occ.getHours();
-          const startMinute = occ.getMinutes();
-
-          const totalMinutesFromStart = (startHour - HOUR_START) * 60 + startMinute;
-          const topPercent = (totalMinutesFromStart / ((HOUR_END - HOUR_START) * 60)) * 100;
-          const durationMinutes = entry.duration / 60;
-          const heightPercent = (durationMinutes / ((HOUR_END - HOUR_START) * 60)) * 100;
-
-          if (startHour >= HOUR_START && startHour < HOUR_END) {
-            // Create a shallow clone with occurrence date for time formatting
-            const occEntry = { ...entry, date: occ.toISOString(), startTime: occ.toISOString() };
-            result[dayKey].push({
-              entry: occEntry,
-              project,
-              topPercent: Math.max(0, topPercent),
-              heightPercent: Math.max(2, heightPercent),
-              startHour,
-              startMinute,
-            });
-          }
+          
+          const entryStart = occ;
+          const entryEnd = new Date(occ.getTime() + entry.duration * 1000);
+          
+          // For each day in the week, check if entry overlaps
+          days.forEach(day => {
+            const dayStart = new Date(day);
+            dayStart.setHours(HOUR_START, 0, 0, 0);
+            const dayEnd = new Date(day);
+            dayEnd.setHours(HOUR_END, 0, 0, 0);
+            
+            // Check if entry overlaps with this day
+            if (entryStart < dayEnd && entryEnd > dayStart) {
+              const dayKey = format(day, 'yyyy-MM-dd');
+              
+              // Calculate visible portion on this day
+              const visibleStart = entryStart > dayStart ? entryStart : dayStart;
+              const visibleEnd = entryEnd < dayEnd ? entryEnd : dayEnd;
+              
+              const startHour = visibleStart.getHours();
+              const startMinute = visibleStart.getMinutes();
+              
+              const totalMinutesFromStart = (startHour - HOUR_START) * 60 + startMinute;
+              const topPercent = (totalMinutesFromStart / ((HOUR_END - HOUR_START) * 60)) * 100;
+              
+              const visibleDurationMs = visibleEnd.getTime() - visibleStart.getTime();
+              const durationMinutes = visibleDurationMs / (60 * 1000);
+              const heightPercent = (durationMinutes / ((HOUR_END - HOUR_START) * 60)) * 100;
+              
+              if (startHour >= HOUR_START && startHour < HOUR_END) {
+                // Create a shallow clone with occurrence date for time formatting
+                const occEntry = { ...entry, date: visibleStart.toISOString(), startTime: visibleStart.toISOString() };
+                result[dayKey].push({
+                  entry: occEntry,
+                  project: projects.find(p => p.id === entry.projectId),
+                  topPercent: Math.max(0, topPercent),
+                  heightPercent: Math.max(2, heightPercent),
+                  startHour,
+                  startMinute,
+                });
+              }
+            }
+          });
         });
       } catch (e) {
         console.warn('Failed to parse entry:', entry);
@@ -306,7 +341,8 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
       minute = 0;
     }
 
-    if (hour >= HOUR_END) hour = HOUR_END - 1;
+    // Allow hour to reach 24 (midnight of next day), but not beyond
+    if (hour > HOUR_END) hour = HOUR_END;
     if (hour < HOUR_START) hour = HOUR_START;
 
     return { hour, minute };
@@ -375,21 +411,38 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isDragging || !dragStart || !gridRef.current) return;
 
+    // Find which day column the mouse is over
+    const dayElements = gridRef.current.querySelectorAll('[data-day-column]');
+    let targetDay = dragStart.day;
+    
+    for (const elem of Array.from(dayElements)) {
+      const dayRect = elem.getBoundingClientRect();
+      if (e.clientX >= dayRect.left && e.clientX <= dayRect.right) {
+        const dayStr = elem.getAttribute('data-day-column');
+        if (dayStr) {
+          targetDay = parseISO(dayStr);
+        }
+        break;
+      }
+    }
+
     const rect = gridRef.current.getBoundingClientRect();
     const pixel = e.clientY - rect.top;
     const { hour, minute } = pixelToTime(pixel);
 
-    if (hour >= HOUR_START && hour < HOUR_END) {
-      const endDateTime = new Date(dragStart.day);
-      endDateTime.setHours(hour, minute, 0, 0);
+    // Allow hour to be 24 (midnight of next day)
+    const effectiveHour = hour >= HOUR_START && hour <= HOUR_END ? hour : (hour > HOUR_END ? HOUR_END : HOUR_START);
+    const effectiveMinute = effectiveHour === HOUR_END ? 0 : minute;
 
-      // Ensure end is after start
-      const startDateTime = new Date(dragStart.day);
-      startDateTime.setHours(dragStart.hour, dragStart.minute, 0, 0);
+    const endDateTime = new Date(targetDay);
+    endDateTime.setHours(effectiveHour, effectiveMinute, 0, 0);
 
-      if (endDateTime > startDateTime) {
-        setDragEnd({ day: dragStart.day, hour, minute });
-      }
+    // Ensure end is after start
+    const startDateTime = new Date(dragStart.day);
+    startDateTime.setHours(dragStart.hour, dragStart.minute, 0, 0);
+
+    if (endDateTime > startDateTime) {
+      setDragEnd({ day: targetDay, hour: effectiveHour, minute: effectiveMinute });
     }
   };
 
@@ -397,21 +450,38 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!isDragging || !dragStart || !gridRef.current || e.touches.length !== 1) return;
 
+    // Find which day column the touch is over
+    const dayElements = gridRef.current.querySelectorAll('[data-day-column]');
+    let targetDay = dragStart.day;
+    
+    for (const elem of Array.from(dayElements)) {
+      const dayRect = elem.getBoundingClientRect();
+      if (e.touches[0].clientX >= dayRect.left && e.touches[0].clientX <= dayRect.right) {
+        const dayStr = elem.getAttribute('data-day-column');
+        if (dayStr) {
+          targetDay = parseISO(dayStr);
+        }
+        break;
+      }
+    }
+
     const rect = gridRef.current.getBoundingClientRect();
     const pixel = e.touches[0].clientY - rect.top;
     const { hour, minute } = pixelToTime(pixel);
 
-    if (hour >= HOUR_START && hour < HOUR_END) {
-      const endDateTime = new Date(dragStart.day);
-      endDateTime.setHours(hour, minute, 0, 0);
+    // Allow hour to be 24 (midnight of next day)
+    const effectiveHour = hour >= HOUR_START && hour <= HOUR_END ? hour : (hour > HOUR_END ? HOUR_END : HOUR_START);
+    const effectiveMinute = effectiveHour === HOUR_END ? 0 : minute;
 
-      // Ensure end is after start
-      const startDateTime = new Date(dragStart.day);
-      startDateTime.setHours(dragStart.hour, dragStart.minute, 0, 0);
+    const endDateTime = new Date(targetDay);
+    endDateTime.setHours(effectiveHour, effectiveMinute, 0, 0);
 
-      if (endDateTime > startDateTime) {
-        setDragEnd({ day: dragStart.day, hour, minute });
-      }
+    // Ensure end is after start
+    const startDateTime = new Date(dragStart.day);
+    startDateTime.setHours(dragStart.hour, dragStart.minute, 0, 0);
+
+    if (endDateTime > startDateTime) {
+      setDragEnd({ day: targetDay, hour: effectiveHour, minute: effectiveMinute });
     }
   };
 
@@ -463,7 +533,9 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
 
   return (
     <TooltipProvider>
-      <div className="space-y-4">
+      <div className={isExpanded ? "h-full w-full flex flex-col" : "space-y-4"}>
+        {!isExpanded && (
+        <>
         {/* Week Navigation */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -497,6 +569,15 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
                 : `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d, yyyy')}`}
             </span>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.open('/calendar/expanded', '_blank')}
+            title="Open in expanded view"
+            aria-label="Expand calendar to full screen"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Calendar checkboxes and default selection */}
@@ -574,11 +655,13 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
             </Select>
           </div>
         </div>
+        </>
+        )}
 
         {/* Calendar Grid */}
-        <div className="border border-border rounded-lg overflow-hidden bg-background flex flex-col max-h-[calc(100vh-300px)]">
+        <div className={isExpanded ? "flex-1 overflow-hidden bg-background flex flex-col" : "border border-border rounded-lg overflow-hidden bg-background flex flex-col max-h-[calc(100vh-300px)]"}>
           {/* Day Headers - Sticky */}
-          <div className="grid grid-cols-8 border-b border-border bg-background flex-shrink-0">
+          <div className={view === 'day' ? 'grid [grid-template-columns:120px_1fr] border-b border-border bg-background flex-shrink-0' : 'grid grid-cols-8 border-b border-border bg-background flex-shrink-0'}>
             <div className="col-span-1 p-4 border-r border-border bg-muted/30">
               <div className="text-xs font-semibold text-muted-foreground">Time</div>
             </div>
@@ -604,10 +687,10 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
           </div>
 
           {/* Time Grid - Scrollable Container */}
-          <div className="overflow-y-auto flex-1 scroll-hide">
+          <div className={isExpanded ? "flex-1 overflow-y-auto scroll-hide pb-24" : "overflow-y-auto flex-1 scroll-hide pb-24"}>
             <div
               ref={gridRef}
-              className="grid grid-cols-8 relative"
+              className={view === 'day' ? 'grid [grid-template-columns:120px_1fr] relative' : 'grid grid-cols-8 relative'}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
@@ -636,13 +719,41 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
             {days.map((day) => {
               const dayKey = format(day, 'yyyy-MM-dd');
               const dayEntries = entriesByDay[dayKey] || [];
-              const isDragDay = isDragging && dragStart && format(dragStart.day, 'yyyy-MM-dd') === dayKey;
-              const dragPreviewTop = isDragDay && dragStart
-                ? ((dragStart.hour - HOUR_START) * 60 + dragStart.minute) / 60 * 80
-                : 0;
-              const dragPreviewHeight = isDragDay && dragStart && dragEnd
-                ? Math.max(15, ((dragEnd.hour - HOUR_START) * 60 + dragEnd.minute) - ((dragStart.hour - HOUR_START) * 60 + dragStart.minute)) / 60 * 80
-                : 0;
+              
+              // Check if this day is involved in the drag (either start day, end day, or in between)
+              let isDragDay = false;
+              let dragPreviewTop = 0;
+              let dragPreviewHeight = 0;
+              
+              if (isDragging && dragStart && dragEnd) {
+                const dragStartDay = format(dragStart.day, 'yyyy-MM-dd');
+                const dragEndDay = format(dragEnd.day, 'yyyy-MM-dd');
+                const currentDay = dayKey;
+                
+                // Check if current day is the start day, end day, or in between
+                if (dragStartDay === dragEndDay && currentDay === dragStartDay) {
+                  // Single day drag
+                  isDragDay = true;
+                  dragPreviewTop = ((dragStart.hour - HOUR_START) * 60 + dragStart.minute) / 60 * 80;
+                  dragPreviewHeight = Math.max(15, ((dragEnd.hour - HOUR_START) * 60 + dragEnd.minute) - ((dragStart.hour - HOUR_START) * 60 + dragStart.minute)) / 60 * 80;
+                } else if (currentDay === dragStartDay) {
+                  // Start day of multi-day drag
+                  isDragDay = true;
+                  dragPreviewTop = ((dragStart.hour - HOUR_START) * 60 + dragStart.minute) / 60 * 80;
+                  dragPreviewHeight = ((HOUR_END - HOUR_START) * 60 - ((dragStart.hour - HOUR_START) * 60 + dragStart.minute)) / 60 * 80;
+                } else if (currentDay === dragEndDay) {
+                  // End day of multi-day drag
+                  isDragDay = true;
+                  dragPreviewTop = 0;
+                  dragPreviewHeight = ((dragEnd.hour - HOUR_START) * 60 + dragEnd.minute) / 60 * 80;
+                } else if (new Date(currentDay) > new Date(dragStartDay) && new Date(currentDay) < new Date(dragEndDay)) {
+                  // Day in between start and end
+                  isDragDay = true;
+                  dragPreviewTop = 0;
+                  dragPreviewHeight = (HOUR_END - HOUR_START) * 80;
+                }
+              }
+              
               const isToday = format(day, 'yyyy-MM-dd') === format(currentTime, 'yyyy-MM-dd');
               const totalMinutes = (HOUR_END - HOUR_START) * 60;
               const minutesFromStart = isToday
@@ -656,6 +767,7 @@ export function WeekCalendar({ entries, projects, view = 'week' }: WeekCalendarP
               return (
                 <div
                   key={dayKey}
+                  data-day-column={dayKey}
                   className="col-span-1 border-r border-border relative cursor-grab active:cursor-grabbing"
                   onMouseDown={(e) => handleMouseDown(day, e)}
                   onTouchStart={(e) => handleTouchStart(day, e)}
